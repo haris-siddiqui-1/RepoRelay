@@ -1223,6 +1223,143 @@ class Product(models.Model):
     async_updating = models.BooleanField(default=False,
                                             help_text=_("Findings under this Product or SLA configuration are asynchronously being updated"))
 
+    # Enterprise Context Enrichment - Repository Activity Tracking
+    last_commit_date = models.DateTimeField(null=True, blank=True,
+                                           verbose_name=_("Last Commit Date"),
+                                           help_text=_("Date of the last commit to the repository"))
+    active_contributors_90d = models.IntegerField(default=0,
+                                                  verbose_name=_("Active Contributors (90d)"),
+                                                  help_text=_("Number of active contributors in the last 90 days"))
+    days_since_last_commit = models.IntegerField(null=True, blank=True,
+                                                 verbose_name=_("Days Since Last Commit"),
+                                                 help_text=_("Calculated: days elapsed since last commit"))
+
+    # Enterprise Context Enrichment - Repository Metadata
+    github_url = models.URLField(max_length=600, blank=True,
+                                verbose_name=_("GitHub URL"),
+                                help_text=_("Full GitHub repository URL"))
+    github_repo_id = models.CharField(max_length=100, blank=True,
+                                     verbose_name=_("GitHub Repository ID"),
+                                     help_text=_("GitHub's internal repository ID"))
+    readme_summary = models.TextField(max_length=500, blank=True,
+                                     verbose_name=_("README Summary"),
+                                     help_text=_("Auto-generated summary of repository README"))
+    readme_length = models.IntegerField(default=0,
+                                       verbose_name=_("README Length"),
+                                       help_text=_("Character count of README file"))
+    primary_language = models.CharField(max_length=50, blank=True,
+                                       verbose_name=_("Primary Language"),
+                                       help_text=_("Primary programming language detected"))
+    primary_framework = models.CharField(max_length=50, blank=True,
+                                        verbose_name=_("Primary Framework"),
+                                        help_text=_("Primary framework detected from README"))
+
+    # Enterprise Context Enrichment - Ownership Tracking
+    codeowners_content = models.TextField(blank=True,
+                                         verbose_name=_("CODEOWNERS Content"),
+                                         help_text=_("Raw content of CODEOWNERS file"))
+    ownership_confidence = models.IntegerField(default=0,
+                                              validators=[MinValueValidator(0), MaxValueValidator(100)],
+                                              verbose_name=_("Ownership Confidence"),
+                                              help_text=_("Confidence score (0-100) for ownership data quality"))
+
+    # Enterprise Context Enrichment - Binary Signals: Deployment Indicators
+    has_dockerfile = models.BooleanField(default=False,
+                                        verbose_name=_("Has Dockerfile"),
+                                        help_text=_("Repository contains Dockerfile"))
+    has_kubernetes_config = models.BooleanField(default=False,
+                                               verbose_name=_("Has Kubernetes Config"),
+                                               help_text=_("Repository contains K8s manifests or Helm charts"))
+    has_ci_cd = models.BooleanField(default=False,
+                                   verbose_name=_("Has CI/CD"),
+                                   help_text=_("Repository has CI/CD configuration"))
+    has_terraform = models.BooleanField(default=False,
+                                       verbose_name=_("Has Terraform"),
+                                       help_text=_("Repository contains Terraform IaC"))
+    has_deployment_scripts = models.BooleanField(default=False,
+                                                verbose_name=_("Has Deployment Scripts"),
+                                                help_text=_("Repository contains deployment scripts"))
+    has_procfile = models.BooleanField(default=False,
+                                      verbose_name=_("Has Procfile"),
+                                      help_text=_("Repository contains Procfile for PaaS deployment"))
+
+    # Enterprise Context Enrichment - Binary Signals: Production Readiness
+    has_environments = models.BooleanField(default=False,
+                                          verbose_name=_("Has Environments"),
+                                          help_text=_("GitHub environments configured"))
+    has_releases = models.BooleanField(default=False,
+                                      verbose_name=_("Has Releases"),
+                                      help_text=_("GitHub releases exist"))
+    has_branch_protection = models.BooleanField(default=False,
+                                               verbose_name=_("Has Branch Protection"),
+                                               help_text=_("Protected main branch configured"))
+    has_monitoring_config = models.BooleanField(default=False,
+                                               verbose_name=_("Has Monitoring Config"),
+                                               help_text=_("Monitoring configuration present"))
+    has_ssl_config = models.BooleanField(default=False,
+                                        verbose_name=_("Has SSL Config"),
+                                        help_text=_("SSL/TLS configuration present"))
+    has_database_migrations = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Database Migrations"),
+                                                  help_text=_("Database migration files present"))
+
+    # Enterprise Context Enrichment - Binary Signals: Active Development
+    recent_commits_30d = models.BooleanField(default=False,
+                                            verbose_name=_("Recent Commits (30d)"),
+                                            help_text=_("Has commits in last 30 days"))
+    active_prs_30d = models.BooleanField(default=False,
+                                        verbose_name=_("Active PRs (30d)"),
+                                        help_text=_("Has PRs in last 30 days"))
+    multiple_contributors = models.BooleanField(default=False,
+                                               verbose_name=_("Multiple Contributors"),
+                                               help_text=_("More than 1 contributor in 90 days"))
+    has_dependabot_activity = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Dependabot Activity"),
+                                                  help_text=_("Dependabot updates detected"))
+    recent_releases_90d = models.BooleanField(default=False,
+                                             verbose_name=_("Recent Releases (90d)"),
+                                             help_text=_("Has releases in last 90 days"))
+    consistent_commit_pattern = models.BooleanField(default=False,
+                                                    verbose_name=_("Consistent Commit Pattern"),
+                                                    help_text=_("Regular commit schedule detected"))
+
+    # Enterprise Context Enrichment - Binary Signals: Code Organization
+    has_tests = models.BooleanField(default=False,
+                                   verbose_name=_("Has Tests"),
+                                   help_text=_("Test directories present"))
+    has_documentation = models.BooleanField(default=False,
+                                           verbose_name=_("Has Documentation"),
+                                           help_text=_("Documentation directory or detailed README"))
+    has_api_specs = models.BooleanField(default=False,
+                                       verbose_name=_("Has API Specs"),
+                                       help_text=_("OpenAPI/Swagger specs present"))
+    has_codeowners = models.BooleanField(default=False,
+                                        verbose_name=_("Has CODEOWNERS"),
+                                        help_text=_("CODEOWNERS file present"))
+    has_security_md = models.BooleanField(default=False,
+                                         verbose_name=_("Has SECURITY.md"),
+                                         help_text=_("Security policy documented"))
+    is_monorepo = models.BooleanField(default=False,
+                                     verbose_name=_("Is Monorepo"),
+                                     help_text=_("Multiple projects in single repository"))
+
+    # Enterprise Context Enrichment - Binary Signals: Security Maturity
+    has_security_scanning = models.BooleanField(default=False,
+                                               verbose_name=_("Has Security Scanning"),
+                                               help_text=_("Security scanning in CI/CD"))
+    has_secret_scanning = models.BooleanField(default=False,
+                                             verbose_name=_("Has Secret Scanning"),
+                                             help_text=_("Secret scanning enabled"))
+    has_dependency_scanning = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Dependency Scanning"),
+                                                  help_text=_("Dependency scanning configured"))
+    has_gitleaks_config = models.BooleanField(default=False,
+                                             verbose_name=_("Has Gitleaks Config"),
+                                             help_text=_("Gitleaks secret detection configured"))
+    has_sast_config = models.BooleanField(default=False,
+                                         verbose_name=_("Has SAST Config"),
+                                         help_text=_("SAST tools configured"))
+
     class Meta:
         ordering = ("name",)
 
@@ -2606,6 +2743,28 @@ class Finding(models.Model):
                                          max_length=100,
                                          verbose_name=_("Component version"),
                                          help_text=_("Version of the affected component."))
+
+    # Enterprise Context Enrichment - Auto-Triage Fields
+    AUTO_TRIAGE_CHOICES = (
+        ('PENDING', _('Pending Triage')),
+        ('DISMISS', _('Auto-Dismissed')),
+        ('ESCALATE', _('Auto-Escalated')),
+        ('ACCEPT_RISK', _('Auto-Accepted Risk')),
+    )
+    auto_triage_decision = models.CharField(max_length=20,
+                                           choices=AUTO_TRIAGE_CHOICES,
+                                           default='PENDING',
+                                           blank=True,
+                                           verbose_name=_("Auto-Triage Decision"),
+                                           help_text=_("Automated triage decision based on rules"))
+    auto_triage_reason = models.TextField(blank=True,
+                                         verbose_name=_("Auto-Triage Reason"),
+                                         help_text=_("Explanation for the auto-triage decision"))
+    auto_triaged_at = models.DateTimeField(null=True,
+                                          blank=True,
+                                          verbose_name=_("Auto-Triaged At"),
+                                          help_text=_("Timestamp when auto-triage was performed"))
+
     found_by = models.ManyToManyField(Test_Type,
                                       editable=False,
                                       verbose_name=_("Found by"),
