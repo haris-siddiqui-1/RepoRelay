@@ -2078,3 +2078,28 @@ PGHISTORY_OBJ_FIELD = pghistory.ObjForeignKey(db_index=True)
 #########################################################################################################
 # End of Auditlog configuration                                                                          #
 #########################################################################################################
+
+#########################################################################################################
+# Enterprise Context Enrichment Configuration                                                           #
+#########################################################################################################
+
+# GitHub Repository Integration
+# Fetches repository metadata, activity metrics, and binary signals from GitHub API
+DD_GITHUB_TOKEN = env("DD_GITHUB_TOKEN", default="")
+DD_GITHUB_ORG = env("DD_GITHUB_ORG", default="")
+DD_GITHUB_SYNC_INTERVAL_HOURS = env.int("DD_GITHUB_SYNC_INTERVAL_HOURS", default=4)
+DD_AUTO_ARCHIVE_DAYS = env.int("DD_AUTO_ARCHIVE_DAYS", default=180)
+
+# EPSS Integration
+# Fetches Exploit Prediction Scoring System scores from FIRST.org API
+DD_EPSS_API_URL = env("DD_EPSS_API_URL", default="https://api.first.org/data/v1/epss")
+DD_EPSS_SYNC_ENABLED = env.bool("DD_EPSS_SYNC_ENABLED", default=True)
+
+# Auto-Triage Configuration
+# Automatically triages findings based on EPSS scores and repository context
+DD_AUTO_TRIAGE_ENABLED = env.bool("DD_AUTO_TRIAGE_ENABLED", default=False)
+DD_AUTO_TRIAGE_RULES_PATH = env("DD_AUTO_TRIAGE_RULES_PATH", default="dojo/auto_triage/rules.py")
+
+#########################################################################################################
+# End of Enterprise Context Enrichment Configuration                                                    #
+#########################################################################################################
