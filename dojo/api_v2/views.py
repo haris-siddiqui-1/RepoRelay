@@ -3177,3 +3177,424 @@ class NotificationWebhooksViewSet(
     filter_backends = (DjangoFilterBackend,)
     filterset_fields = "__all__"
     permission_classes = (permissions.IsSuperUser, DjangoModelPermissions)  # TODO: add permission also for other users
+
+
+# ============================================================================
+# Enterprise Context Enrichment Endpoints
+# ============================================================================
+
+
+class GitHubSyncView(GenericAPIView):
+    """
+    Trigger GitHub repository metadata sync.
+
+    Fetches repository metadata from GitHub API and updates Product records
+    with activity metrics, binary signals, and tier classification.
+
+    POST /api/v2/products/sync_github/
+    {
+        "incremental": true,
+        "archive_dormant": false
+    }
+    """
+    serializer_class = serializers.GitHubSyncRequestSerializer
+    permission_classes = (IsAuthenticated, permissions.UserHasSuperuserPermission)
+
+    @extend_schema(
+        request=serializers.GitHubSyncRequestSerializer,
+        responses={
+            200: serializers.GitHubSyncResponseSerializer,
+            400: OpenApiResponse(description="Invalid request or GitHub not configured"),
+            403: OpenApiResponse(description="Permission denied"),
+            500: OpenApiResponse(description="Sync failed"),
+        },
+        tags=["products"],
+        summary="Sync GitHub repository metadata",
+    )
+    def post(self, request):
+        """Trigger GitHub metadata sync."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        incremental = serializer.validated_data.get('incremental', True)
+        archive_dormant = serializer.validated_data.get('archive_dormant', False)
+
+        try:
+            from dojo.github_collector import GitHubRepositoryCollector
+
+            # Check configuration
+            github_token = getattr(settings, 'DD_GITHUB_TOKEN', '')
+            github_org = getattr(settings, 'DD_GITHUB_ORG', '')
+
+            if not github_token or not github_org:
+                return Response(
+                    {
+                        'status': 'error',
+                        'message': 'GitHub integration not configured. Set DD_GITHUB_TOKEN and DD_GITHUB_ORG environment variables.'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Initialize collector and sync
+            collector = GitHubRepositoryCollector(github_token=github_token, github_org=github_org)
+            stats = collector.sync_all_repositories(incremental=incremental)
+
+            # Archive dormant repositories if requested
+            if archive_dormant:
+                from dojo.models import Product
+                archive_days = getattr(settings, 'DD_AUTO_ARCHIVE_DAYS', 180)
+                dormant = Product.objects.filter(
+                    days_since_last_commit__gt=archive_days,
+                    lifecycle__in=[Product.CONSTRUCTION, Product.PRODUCTION]
+                )
+                archived_count = dormant.count()
+                dormant.update(lifecycle=Product.RETIREMENT, business_criticality='none')
+                stats['archived'] = archived_count
+
+            return Response(
+                {
+                    'status': 'success',
+                    'message': f'GitHub sync completed successfully',
+                    'stats': stats
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except ImportError:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'GitHub collector module not available'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.exception("GitHub sync failed")
+            return Response(
+                {
+                    'status': 'error',
+                    'message': f'GitHub sync failed: {str(e)}'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class UpdateRepositorySignalsView(GenericAPIView):
+    """
+    Update repository signals for specific product.
+
+    Re-analyzes GitHub repository and updates binary signals for a single product.
+
+    POST /api/v2/products/{id}/update_repository_signals/
+    """
+    serializer_class = serializers.UpdateRepositorySignalsRequestSerializer
+    permission_classes = (IsAuthenticated, permissions.UserHasProductPermission)
+
+    @extend_schema(
+        request=serializers.UpdateRepositorySignalsRequestSerializer,
+        responses={
+            200: serializers.UpdateRepositorySignalsResponseSerializer,
+            400: OpenApiResponse(description="Invalid request or product not found"),
+            403: OpenApiResponse(description="Permission denied"),
+            500: OpenApiResponse(description="Update failed"),
+        },
+        tags=["products"],
+        summary="Update repository signals for product",
+    )
+    def post(self, request):
+        """Update repository signals for specific product."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        product_id = serializer.validated_data['product_id']
+
+        try:
+            from dojo.models import Product
+            from dojo.github_collector import GitHubRepositoryCollector
+
+            product = get_object_or_404(Product, id=product_id)
+
+            if not product.github_url:
+                return Response(
+                    {
+                        'status': 'error',
+                        'message': f'Product "{product.name}" has no github_url set'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Initialize collector
+            github_token = getattr(settings, 'DD_GITHUB_TOKEN', '')
+            github_org = getattr(settings, 'DD_GITHUB_ORG', '')
+
+            if not github_token:
+                return Response(
+                    {
+                        'status': 'error',
+                        'message': 'GitHub integration not configured'
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            collector = GitHubRepositoryCollector(github_token=github_token, github_org=github_org)
+            success = collector.sync_product_from_github_url(product)
+
+            if not success:
+                return Response(
+                    {
+                        'status': 'error',
+                        'message': f'Failed to sync product {product.name}'
+                    },
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+            # Refresh product from DB
+            product.refresh_from_db()
+
+            return Response(
+                {
+                    'status': 'success',
+                    'product_id': product.id,
+                    'product_name': product.name,
+                    'signals': serializers.ProductRepositorySignalsSerializer(product).data
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.exception(f"Failed to update repository signals for product {product_id}")
+            return Response(
+                {
+                    'status': 'error',
+                    'message': f'Update failed: {str(e)}'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class BulkTriageView(GenericAPIView):
+    """
+    Apply auto-triage rules to findings.
+
+    Evaluates triage rules based on EPSS scores, repository tier, and business
+    criticality to automatically dismiss, escalate, or accept risk.
+
+    POST /api/v2/findings/bulk_triage/
+    {
+        "product_id": 123,  # Optional
+        "finding_ids": [456, 789],  # Optional
+        "active_only": true
+    }
+    """
+    serializer_class = serializers.BulkTriageRequestSerializer
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        request=serializers.BulkTriageRequestSerializer,
+        responses={
+            200: serializers.BulkTriageResponseSerializer,
+            400: OpenApiResponse(description="Invalid request or auto-triage disabled"),
+            403: OpenApiResponse(description="Permission denied"),
+            500: OpenApiResponse(description="Triage failed"),
+        },
+        tags=["findings"],
+        summary="Apply auto-triage rules to findings",
+    )
+    def post(self, request):
+        """Apply auto-triage rules to findings."""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        product_id = serializer.validated_data.get('product_id')
+        finding_ids = serializer.validated_data.get('finding_ids')
+        active_only = serializer.validated_data.get('active_only', True)
+
+        # Check if auto-triage is enabled
+        auto_triage_enabled = getattr(settings, 'DD_AUTO_TRIAGE_ENABLED', False)
+        if not auto_triage_enabled:
+            return Response(
+                {
+                    'status': 'disabled',
+                    'message': 'Auto-triage is disabled in settings (DD_AUTO_TRIAGE_ENABLED=False)'
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from dojo.auto_triage import AutoTriageEngine
+
+            engine = AutoTriageEngine()
+
+            # Determine triage scope
+            if finding_ids:
+                stats = engine.triage_findings_by_ids(finding_ids)
+                scope = f'{len(finding_ids)} specific findings'
+            elif product_id:
+                # Check product permission
+                from dojo.models import Product
+                product = get_object_or_404(Product, id=product_id)
+                stats = engine.triage_findings_by_product(product_id)
+                scope = f'product {product.name}'
+            else:
+                # Check superuser for triaging all findings
+                if not request.user.is_superuser:
+                    return Response(
+                        {
+                            'status': 'error',
+                            'message': 'Superuser permission required to triage all findings'
+                        },
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                stats = engine.triage_all_findings(active_only=active_only)
+                scope = 'all findings'
+
+            return Response(
+                {
+                    'status': 'success',
+                    'message': f'Auto-triage completed for {scope}',
+                    'stats': stats
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except ImportError:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'Auto-triage engine module not available'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.exception("Auto-triage failed")
+            return Response(
+                {
+                    'status': 'error',
+                    'message': f'Auto-triage failed: {str(e)}'
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class CrossRepositoryDuplicatesView(GenericAPIView):
+    """
+    Get cross-repository duplicate findings.
+
+    Identifies vulnerabilities (same CVE/component/version) that appear across
+    multiple repositories, helping prioritize fixes with broad impact.
+
+    GET /api/v2/findings/cross_repository_duplicates/?min_repos=2&severity=Critical,High
+    """
+    serializer_class = serializers.CrossRepositoryDuplicatesResponseSerializer
+    permission_classes = (IsAuthenticated,)
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="min_repos",
+                type=OpenApiTypes.INT,
+                description="Minimum number of repositories (default: 2)",
+                required=False
+            ),
+            OpenApiParameter(
+                name="severity",
+                type=OpenApiTypes.STR,
+                description="Filter by severity (comma-separated: Critical,High,Medium,Low)",
+                required=False
+            ),
+            OpenApiParameter(
+                name="limit",
+                type=OpenApiTypes.INT,
+                description="Maximum number of duplicate groups to return (default: 100)",
+                required=False
+            ),
+        ],
+        responses={
+            200: serializers.CrossRepositoryDuplicatesResponseSerializer,
+            403: OpenApiResponse(description="Permission denied"),
+        },
+        tags=["findings"],
+        summary="Get cross-repository duplicate findings",
+    )
+    def get(self, request):
+        """Get cross-repository duplicate findings."""
+        from django.db.models import Count
+        from dojo.models import Finding
+
+        min_repos = int(request.query_params.get('min_repos', 2))
+        severity_filter = request.query_params.get('severity', '')
+        limit = int(request.query_params.get('limit', 100))
+
+        # Build query for duplicates
+        queryset = Finding.objects.filter(active=True).exclude(
+            cve__isnull=True
+        ).exclude(cve='')
+
+        # Apply severity filter
+        if severity_filter:
+            severities = [s.strip() for s in severity_filter.split(',')]
+            queryset = queryset.filter(severity__in=severities)
+
+        # Aggregate by CVE/component/version
+        duplicates = queryset.values(
+            'component_name', 'component_version', 'cve', 'severity'
+        ).annotate(
+            repo_count=Count('test__engagement__product', distinct=True),
+            finding_count=Count('id')
+        ).filter(
+            repo_count__gte=min_repos
+        ).order_by('-repo_count', '-finding_count')[:limit]
+
+        # Enrich with repository and finding details
+        result = []
+        for dup in duplicates:
+            # Get repositories
+            findings_in_group = queryset.filter(
+                component_name=dup['component_name'],
+                component_version=dup['component_version'],
+                cve=dup['cve']
+            ).select_related('test__engagement__product')
+
+            repositories = []
+            sample_findings = []
+
+            seen_repos = set()
+            for finding in findings_in_group[:20]:  # Limit samples
+                product = finding.test.engagement.product
+                if product.id not in seen_repos:
+                    repositories.append({
+                        'id': product.id,
+                        'name': product.name,
+                        'tier': product.business_criticality,
+                        'github_url': product.github_url
+                    })
+                    seen_repos.add(product.id)
+
+                if len(sample_findings) < 5:
+                    sample_findings.append({
+                        'id': finding.id,
+                        'title': finding.title,
+                        'product_name': product.name,
+                        'severity': finding.severity,
+                        'epss_score': finding.epss_score
+                    })
+
+            result.append({
+                'component_name': dup['component_name'],
+                'component_version': dup['component_version'],
+                'cve': dup['cve'],
+                'severity': dup['severity'],
+                'repository_count': dup['repo_count'],
+                'finding_count': dup['finding_count'],
+                'repositories': repositories,
+                'sample_findings': sample_findings
+            })
+
+        return Response(
+            {
+                'total_duplicate_groups': len(result),
+                'total_findings': sum(d['finding_count'] for d in result),
+                'duplicates': result
+            },
+            status=status.HTTP_200_OK
+        )

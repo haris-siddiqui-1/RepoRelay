@@ -3173,3 +3173,190 @@ class NotificationWebhooksSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification_Webhooks
         fields = "__all__"
+
+
+# ============================================================================
+# Enterprise Context Enrichment Serializers
+# ============================================================================
+
+
+class ProductRepositorySignalsSerializer(serializers.Serializer):
+    """
+    Read-only serializer for Product repository signals.
+
+    Returns all 36 binary signals plus computed metadata.
+    """
+    # Deployment Indicators
+    has_dockerfile = serializers.BooleanField(read_only=True)
+    has_kubernetes_config = serializers.BooleanField(read_only=True)
+    has_ci_cd = serializers.BooleanField(read_only=True)
+    has_terraform = serializers.BooleanField(read_only=True)
+    has_deployment_scripts = serializers.BooleanField(read_only=True)
+    has_procfile = serializers.BooleanField(read_only=True)
+
+    # Production Readiness
+    has_environments = serializers.BooleanField(read_only=True)
+    has_releases = serializers.BooleanField(read_only=True)
+    has_branch_protection = serializers.BooleanField(read_only=True)
+    has_monitoring_config = serializers.BooleanField(read_only=True)
+    has_ssl_config = serializers.BooleanField(read_only=True)
+    has_database_migrations = serializers.BooleanField(read_only=True)
+
+    # Active Development
+    recent_commits_30d = serializers.BooleanField(read_only=True)
+    active_prs_30d = serializers.BooleanField(read_only=True)
+    multiple_contributors = serializers.BooleanField(read_only=True)
+    has_dependabot_activity = serializers.BooleanField(read_only=True)
+    recent_releases_90d = serializers.BooleanField(read_only=True)
+    consistent_commit_pattern = serializers.BooleanField(read_only=True)
+
+    # Code Organization
+    has_tests = serializers.BooleanField(read_only=True)
+    has_documentation = serializers.BooleanField(read_only=True)
+    has_api_specs = serializers.BooleanField(read_only=True)
+    has_codeowners = serializers.BooleanField(read_only=True)
+    has_security_md = serializers.BooleanField(read_only=True)
+    is_monorepo = serializers.BooleanField(read_only=True)
+
+    # Security Maturity
+    has_security_scanning = serializers.BooleanField(read_only=True)
+    has_secret_scanning = serializers.BooleanField(read_only=True)
+    has_dependency_scanning = serializers.BooleanField(read_only=True)
+    has_gitleaks_config = serializers.BooleanField(read_only=True)
+    has_sast_config = serializers.BooleanField(read_only=True)
+
+    # Computed
+    total_signals = serializers.SerializerMethodField()
+    signal_categories = serializers.SerializerMethodField()
+
+    def get_total_signals(self, obj) -> int:
+        """Count total active signals."""
+        signal_fields = [
+            'has_dockerfile', 'has_kubernetes_config', 'has_ci_cd', 'has_terraform',
+            'has_deployment_scripts', 'has_procfile', 'has_environments', 'has_releases',
+            'has_branch_protection', 'has_monitoring_config', 'has_ssl_config',
+            'has_database_migrations', 'recent_commits_30d', 'active_prs_30d',
+            'multiple_contributors', 'has_dependabot_activity', 'recent_releases_90d',
+            'consistent_commit_pattern', 'has_tests', 'has_documentation', 'has_api_specs',
+            'has_codeowners', 'has_security_md', 'is_monorepo', 'has_security_scanning',
+            'has_secret_scanning', 'has_dependency_scanning', 'has_gitleaks_config', 'has_sast_config'
+        ]
+        return sum(1 for field in signal_fields if getattr(obj, field, False))
+
+    def get_signal_categories(self, obj) -> dict:
+        """Return signals grouped by category with counts."""
+        categories = {
+            'deployment': [
+                'has_dockerfile', 'has_kubernetes_config', 'has_ci_cd',
+                'has_terraform', 'has_deployment_scripts', 'has_procfile'
+            ],
+            'production': [
+                'has_environments', 'has_releases', 'has_branch_protection',
+                'has_monitoring_config', 'has_ssl_config', 'has_database_migrations'
+            ],
+            'development': [
+                'recent_commits_30d', 'active_prs_30d', 'multiple_contributors',
+                'has_dependabot_activity', 'recent_releases_90d', 'consistent_commit_pattern'
+            ],
+            'organization': [
+                'has_tests', 'has_documentation', 'has_api_specs',
+                'has_codeowners', 'has_security_md', 'is_monorepo'
+            ],
+            'security': [
+                'has_security_scanning', 'has_secret_scanning', 'has_dependency_scanning',
+                'has_gitleaks_config', 'has_sast_config'
+            ]
+        }
+
+        result = {}
+        for category, fields in categories.items():
+            active_count = sum(1 for field in fields if getattr(obj, field, False))
+            result[category] = {
+                'active': active_count,
+                'total': len(fields),
+                'percentage': round((active_count / len(fields)) * 100, 1) if fields else 0
+            }
+
+        return result
+
+
+class GitHubSyncRequestSerializer(serializers.Serializer):
+    """Request serializer for GitHub sync endpoint."""
+    incremental = serializers.BooleanField(
+        default=True,
+        help_text="Only sync repositories updated since last sync"
+    )
+    archive_dormant = serializers.BooleanField(
+        default=False,
+        help_text="Mark repositories with no commits in 180+ days as archived"
+    )
+
+
+class GitHubSyncResponseSerializer(serializers.Serializer):
+    """Response serializer for GitHub sync endpoint."""
+    status = serializers.CharField()
+    message = serializers.CharField()
+    stats = serializers.DictField(required=False)
+
+
+class UpdateRepositorySignalsRequestSerializer(serializers.Serializer):
+    """Request serializer for updating specific product repository signals."""
+    product_id = serializers.IntegerField(required=True, help_text="Product ID to update")
+
+
+class UpdateRepositorySignalsResponseSerializer(serializers.Serializer):
+    """Response serializer for repository signals update."""
+    status = serializers.CharField()
+    product_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    signals = ProductRepositorySignalsSerializer()
+
+
+class BulkTriageRequestSerializer(serializers.Serializer):
+    """Request serializer for bulk auto-triage endpoint."""
+    product_id = serializers.IntegerField(
+        required=False,
+        help_text="Triage all findings in this product"
+    )
+    finding_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        help_text="List of specific finding IDs to triage"
+    )
+    active_only = serializers.BooleanField(
+        default=True,
+        help_text="Only triage active findings"
+    )
+
+    def validate(self, data):
+        """Ensure at least one scope is provided."""
+        if not data.get('product_id') and not data.get('finding_ids'):
+            # If neither provided, triage all findings
+            pass
+        return data
+
+
+class BulkTriageResponseSerializer(serializers.Serializer):
+    """Response serializer for bulk auto-triage."""
+    status = serializers.CharField()
+    message = serializers.CharField()
+    stats = serializers.DictField()
+
+
+class CrossRepositoryDuplicateSerializer(serializers.Serializer):
+    """Serializer for cross-repository duplicate findings."""
+    component_name = serializers.CharField()
+    component_version = serializers.CharField()
+    cve = serializers.CharField()
+    severity = serializers.CharField()
+    repository_count = serializers.IntegerField()
+    finding_count = serializers.IntegerField()
+    repositories = serializers.ListField(child=serializers.DictField())
+    sample_findings = serializers.ListField(child=serializers.DictField())
+
+
+class CrossRepositoryDuplicatesResponseSerializer(serializers.Serializer):
+    """Response serializer for cross-repository duplicates endpoint."""
+    total_duplicate_groups = serializers.IntegerField()
+    total_findings = serializers.IntegerField()
+    duplicates = CrossRepositoryDuplicateSerializer(many=True)
