@@ -270,3 +270,141 @@ def update_watson_search_index_for_model(model_name, pk_list, *args, **kwargs):
     except Exception as e:
         logger.error(f"Watson async index update failed for {model_name}: {e}")
         raise
+
+
+# ============================================================================
+# Enterprise Context Enrichment Tasks
+# ============================================================================
+
+
+@app.task
+def sync_github_metadata_task(incremental=True, *args, **kwargs):
+    """
+    Celery task to sync repository metadata from GitHub API.
+
+    Fetches repository activity, signals, and tier classification from GitHub
+    and updates Product records with enriched context.
+
+    Args:
+        incremental: If True, only sync repositories updated since last sync
+    """
+    logger.info(f"Starting GitHub metadata sync task (incremental={incremental})")
+
+    try:
+        from dojo.github_collector import GitHubRepositoryCollector
+
+        # Initialize collector from settings
+        github_token = getattr(settings, 'DD_GITHUB_TOKEN', '')
+        github_org = getattr(settings, 'DD_GITHUB_ORG', '')
+
+        if not github_token or not github_org:
+            logger.warning("GitHub integration not configured. Set DD_GITHUB_TOKEN and DD_GITHUB_ORG.")
+            return {'status': 'skipped', 'reason': 'not_configured'}
+
+        collector = GitHubRepositoryCollector(github_token=github_token, github_org=github_org)
+        stats = collector.sync_all_repositories(incremental=incremental)
+
+        logger.info(f"GitHub metadata sync completed: {stats}")
+        return stats
+
+    except ImportError:
+        logger.error("GitHub collector module not available")
+        return {'status': 'error', 'reason': 'module_not_found'}
+    except Exception as e:
+        logger.error(f"GitHub metadata sync failed: {e}", exc_info=True)
+        log_generic_alert("GitHub Sync", "GitHub Metadata Sync Failed", str(e))
+        return {'status': 'error', 'reason': str(e)}
+
+
+@app.task
+def update_epss_scores_task(active_only=True, trigger_triage=False, *args, **kwargs):
+    """
+    Celery task to update EPSS scores for findings.
+
+    Fetches EPSS scores from FIRST.org API and updates Finding records.
+    Optionally triggers auto-triage for findings with significant score changes.
+
+    Args:
+        active_only: If True, only update active findings
+        trigger_triage: If True, trigger auto-triage for significant changes
+    """
+    logger.info(f"Starting EPSS score update task (active_only={active_only}, trigger_triage={trigger_triage})")
+
+    try:
+        from dojo.epss_service import EPSSClient, EPSSUpdater
+
+        # Check if EPSS sync is enabled
+        epss_enabled = getattr(settings, 'DD_EPSS_SYNC_ENABLED', True)
+        if not epss_enabled:
+            logger.info("EPSS sync is disabled in settings")
+            return {'status': 'skipped', 'reason': 'disabled'}
+
+        # Initialize updater
+        client = EPSSClient()
+        updater = EPSSUpdater(client)
+
+        # Check API status
+        if not client.check_api_status():
+            logger.error("EPSS API is not accessible")
+            log_generic_alert("EPSS Update", "EPSS API Not Accessible", "Failed to connect to FIRST.org EPSS API")
+            return {'status': 'error', 'reason': 'api_unavailable'}
+
+        # Perform update
+        stats = updater.update_all_findings(active_only=active_only, trigger_triage=trigger_triage)
+
+        logger.info(f"EPSS score update completed: {stats}")
+        return stats
+
+    except ImportError:
+        logger.error("EPSS service module not available")
+        return {'status': 'error', 'reason': 'module_not_found'}
+    except Exception as e:
+        logger.error(f"EPSS score update failed: {e}", exc_info=True)
+        log_generic_alert("EPSS Update", "EPSS Score Update Failed", str(e))
+        return {'status': 'error', 'reason': str(e)}
+
+
+@app.task
+def apply_auto_triage_task(finding_ids=None, product_id=None, *args, **kwargs):
+    """
+    Celery task to apply auto-triage rules to findings.
+
+    Evaluates triage rules based on EPSS scores, repository tier, and other
+    contextual signals to automatically dismiss, escalate, or accept risk.
+
+    Args:
+        finding_ids: Optional list of specific finding IDs to triage
+        product_id: Optional product ID to triage all findings in that product
+    """
+    logger.info(f"Starting auto-triage task (finding_ids={finding_ids}, product_id={product_id})")
+
+    try:
+        from dojo.auto_triage.engine import AutoTriageEngine
+
+        # Check if auto-triage is enabled
+        auto_triage_enabled = getattr(settings, 'DD_AUTO_TRIAGE_ENABLED', False)
+        if not auto_triage_enabled:
+            logger.info("Auto-triage is disabled in settings")
+            return {'status': 'skipped', 'reason': 'disabled'}
+
+        # Initialize engine
+        engine = AutoTriageEngine()
+
+        # Determine triage scope
+        if finding_ids:
+            stats = engine.triage_findings_by_ids(finding_ids)
+        elif product_id:
+            stats = engine.triage_findings_by_product(product_id)
+        else:
+            stats = engine.triage_all_findings()
+
+        logger.info(f"Auto-triage completed: {stats}")
+        return stats
+
+    except ImportError:
+        logger.warning("Auto-triage engine module not yet implemented")
+        return {'status': 'skipped', 'reason': 'module_not_implemented'}
+    except Exception as e:
+        logger.error(f"Auto-triage task failed: {e}", exc_info=True)
+        log_generic_alert("Auto-Triage", "Auto-Triage Failed", str(e))
+        return {'status': 'error', 'reason': str(e)}
