@@ -173,6 +173,22 @@ if settings.ENABLE_V3_ORGANIZATION_ASSET_RELABEL:
             views.delete_product_group,
             name="delete_product_group",
         ),
+        # Repository health and dashboard views
+        re_path(
+            r"^asset/(?P<pid>\d+)/repository$",
+            views.view_product_repository,
+            name="view_product_repository",
+        ),
+        re_path(
+            r"^repositories$",
+            views.repository_dashboard,
+            name="repository_dashboard",
+        ),
+        re_path(
+            r"^cross_repo_duplicates$",
+            views.product_cross_repo_duplicates,
+            name="product_cross_repo_duplicates",
+        ),
         # TODO: Backwards compatibility; remove after v3 migration is complete
         re_path(r"^product$", redirect_view("product")),
         re_path(r"^product/(?P<pid>\d+)$", redirect_view("view_product")),
@@ -205,6 +221,7 @@ if settings.ENABLE_V3_ORGANIZATION_ASSET_RELABEL:
         re_path(r"^product/(?P<pid>\d+)/add_group$", redirect_view("add_product_group")),
         re_path(r"^product/group/(?P<groupid>\d+)/edit$", redirect_view("edit_product_group")),
         re_path(r"^product/group/(?P<groupid>\d+)/delete$", redirect_view("delete_product_group")),
+        re_path(r"^product/(?P<pid>\d+)/repository$", redirect_view("view_product_repository")),
     ]
 else:
     urlpatterns = [
@@ -279,6 +296,13 @@ else:
                 name="edit_product_group"),
         re_path(r"^product/group/(?P<groupid>\d+)/delete$", views.delete_product_group,
                 name="delete_product_group"),
+        # Repository health and dashboard views
+        re_path(r"^product/(?P<pid>\d+)/repository$", views.view_product_repository,
+                name="view_product_repository"),
+        re_path(r"^repositories$", views.repository_dashboard,
+                name="repository_dashboard"),
+        re_path(r"^cross_repo_duplicates$", views.product_cross_repo_duplicates,
+                name="product_cross_repo_duplicates"),
         # Forward compatibility
         re_path(r"^asset$", redirect_view("product")),
         re_path(r"^asset/(?P<pid>\d+)$", redirect_view("view_product")),
@@ -314,4 +338,5 @@ else:
         re_path(r"^asset/(?P<pid>\d+)/add_group$", redirect_view("add_product_group")),
         re_path(r"^asset/group/(?P<groupid>\d+)/edit$", redirect_view("edit_product_group")),
         re_path(r"^asset/group/(?P<groupid>\d+)/delete$", redirect_view("delete_product_group")),
+        re_path(r"^asset/(?P<pid>\d+)/repository$", redirect_view("view_product_repository")),
     ]

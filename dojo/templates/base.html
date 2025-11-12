@@ -870,6 +870,13 @@
                                                 {% endif %}
                                             </ul>
                                         </li>
+                                        <!-- Repository Health Tab -->
+                                        <li role="presentation"{% if product_tab.tab == 'repository' %} class="active"{% endif %}>
+                                            <a href="{% url 'view_product_repository' product_tab.product.id %}">
+                                                <span class="fa-brands fa-github" aria-hidden="true"></span>
+                                                <span class="hidden-xs">{% trans "Repository" %}</span>
+                                            </a>
+                                        </li>
                                         <!-- Benchmarks Tab -->
                                         {% if system_settings.enable_benchmark %}
                                             {% if product_tab.product|has_object_permission:"Benchmark_Edit" %}

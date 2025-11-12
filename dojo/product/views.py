@@ -2029,3 +2029,137 @@ def add_product_group(request, pid):
         "form": group_form,
         "product_tab": product_tab,
     })
+
+
+# ============================================================================
+# Enterprise Context Enrichment Views
+# ============================================================================
+
+
+@user_has_permission_or_403(Permissions.Product_View)
+def view_product_repository(request, pid):
+    """
+    Display repository health information for a product.
+
+    Shows GitHub metadata, binary signals, activity metrics, and tier classification.
+    """
+    product = get_object_or_404(Product, id=pid)
+    product_tab = Product_Tab(product, title="Repository Health", tab="repository")
+
+    return render(request, "dojo/product_repository.html", {
+        "product": product,
+        "product_tab": product_tab,
+    })
+
+
+@user_has_permission_or_403(Permissions.Product_View)
+def repository_dashboard(request):
+    """
+    Display dashboard view of all repositories with tier classification.
+
+    Shows aggregated statistics and filterable table of all products.
+    """
+    products = Product.objects.all().select_related('prod_type').order_by('name')
+
+    # Calculate tier statistics
+    tier_stats = {
+        'very_high': products.filter(business_criticality='very high').count(),
+        'high': products.filter(business_criticality='high').count(),
+        'medium': products.filter(business_criticality='medium').count(),
+        'low': products.filter(business_criticality='low').count(),
+        'none': products.filter(business_criticality='none').count(),
+    }
+
+    return render(request, "dojo/repository_dashboard.html", {
+        "products": products,
+        "tier_stats": tier_stats,
+    })
+
+
+@user_has_permission_or_403(Permissions.Finding_View)
+def product_cross_repo_duplicates(request):
+    """
+    Display cross-repository duplicate findings.
+
+    Identifies vulnerabilities that appear across multiple repositories.
+    """
+    from django.db.models import Count
+
+    # Get filter parameters
+    severity_filter = request.GET.get('severity', '')
+    min_repos = int(request.GET.get('min_repos', 2))
+
+    # Build query for duplicates
+    queryset = Finding.objects.filter(active=True).exclude(
+        cve__isnull=True
+    ).exclude(cve='')
+
+    # Apply severity filter
+    if severity_filter:
+        queryset = queryset.filter(severity=severity_filter)
+
+    # Aggregate by CVE/component/version
+    duplicates_data = queryset.values(
+        'component_name', 'component_version', 'cve', 'severity'
+    ).annotate(
+        repo_count=Count('test__engagement__product', distinct=True),
+        finding_count=Count('id')
+    ).filter(
+        repo_count__gte=min_repos
+    ).order_by('-repo_count', '-finding_count')[:100]
+
+    # Enrich with repository and finding details
+    duplicates = []
+    total_findings = 0
+    total_repositories = set()
+
+    for dup in duplicates_data:
+        # Get repositories
+        findings_in_group = queryset.filter(
+            component_name=dup['component_name'],
+            component_version=dup['component_version'],
+            cve=dup['cve']
+        ).select_related('test__engagement__product')
+
+        repositories = []
+        sample_findings = []
+
+        seen_repos = set()
+        for finding in findings_in_group[:20]:
+            product = finding.test.engagement.product
+            if product.id not in seen_repos:
+                repositories.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'tier': product.business_criticality,
+                })
+                seen_repos.add(product.id)
+                total_repositories.add(product.id)
+
+            if len(sample_findings) < 5:
+                sample_findings.append({
+                    'id': finding.id,
+                    'title': finding.title,
+                    'product_name': product.name,
+                    'severity': finding.severity,
+                    'epss_score': finding.epss_score
+                })
+
+        duplicates.append({
+            'component_name': dup['component_name'],
+            'component_version': dup['component_version'],
+            'cve': dup['cve'],
+            'severity': dup['severity'],
+            'repository_count': dup['repo_count'],
+            'finding_count': dup['finding_count'],
+            'repositories': repositories,
+            'sample_findings': sample_findings
+        })
+
+        total_findings += dup['finding_count']
+
+    return render(request, "dojo/product_cross_repo_duplicates.html", {
+        "duplicates": duplicates,
+        "total_findings": total_findings,
+        "total_repositories": len(total_repositories),
+    })

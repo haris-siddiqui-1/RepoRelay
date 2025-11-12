@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load display_tags %}
+{% load static %}
+
+{% block add_styles %}
+    {{ block.super }}
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap.min.css">
+    <style>
+        .severity-Critical { background-color: #d9534f; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold; }
+        .severity-High { background-color: #f0ad4e; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold; }
+        .severity-Medium { background-color: #5bc0de; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold; }
+        .severity-Low { background-color: #5cb85c; color: white; padding: 4px 8px; border-radius: 3px; font-weight: bold; }
+        .repo-count { font-size: 24px; font-weight: bold; color: #337ab7; }
+        .duplicate-group { margin-bottom: 30px; }
+        .repository-list { list-style: none; padding-left: 0; }
+        .repository-list li { padding: 5px 0; }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {{ block.super }}
+
+    <div class="panel panel-default">
+        <div class="panel-heading tight">
+            <div class="clearfix">
+                <h3 class="has-filters">
+                    Cross-Repository Duplicate Findings
+                    <span class="badge">{{ duplicates|length }} Duplicate Groups</span>
+                </h3>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            <div class="alert alert-info">
+                <i class="fa-solid fa-info-circle"></i>
+                <strong>What are cross-repository duplicates?</strong>
+                These are vulnerabilities (same CVE/component/version) that appear across multiple repositories.
+                Fixing these findings in one place may benefit multiple products.
+            </div>
+
+            <!-- Summary Statistics -->
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="panel panel-default text-center">
+                        <div class="panel-body">
+                            <div class="repo-count">{{ duplicates|length }}</div>
+                            <p>Duplicate Groups</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel panel-default text-center">
+                        <div class="panel-body">
+                            <div class="repo-count">{{ total_findings }}</div>
+                            <p>Total Affected Findings</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="panel panel-default text-center">
+                        <div class="panel-body">
+                            <div class="repo-count">{{ total_repositories }}</div>
+                            <p>Affected Repositories</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Filters -->
+            <div class="row">
+                <div class="col-md-12">
+                    <form method="get" class="form-inline">
+                        <div class="form-group">
+                            <label for="severity">Severity:</label>
+                            <select name="severity" id="severity" class="form-control" onchange="this.form.submit()">
+                                <option value="">All</option>
+                                <option value="Critical" {% if request.GET.severity == 'Critical' %}selected{% endif %}>Critical</option>
+                                <option value="High" {% if request.GET.severity == 'High' %}selected{% endif %}>High</option>
+                                <option value="Medium" {% if request.GET.severity == 'Medium' %}selected{% endif %}>Medium</option>
+                                <option value="Low" {% if request.GET.severity == 'Low' %}selected{% endif %}>Low</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="min_repos">Minimum Repositories:</label>
+                            <select name="min_repos" id="min_repos" class="form-control" onchange="this.form.submit()">
+                                <option value="2" {% if request.GET.min_repos == '2' %}selected{% endif %}>2+</option>
+                                <option value="5" {% if request.GET.min_repos == '5' %}selected{% endif %}>5+</option>
+                                <option value="10" {% if request.GET.min_repos == '10' %}selected{% endif %}>10+</option>
+                                <option value="20" {% if request.GET.min_repos == '20' %}selected{% endif %}>20+</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Filter</button>
+                        <a href="{% url 'product_cross_repo_duplicates' %}" class="btn btn-default">Reset</a>
+                    </form>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Duplicate Groups -->
+            {% if duplicates %}
+                {% for dup in duplicates %}
+                <div class="panel panel-default duplicate-group">
+                    <div class="panel-heading">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h4 style="margin: 0;">
+                                    <strong>{{ dup.cve }}</strong> -
+                                    {{ dup.component_name }}
+                                    {% if dup.component_version %}
+                                        v{{ dup.component_version }}
+                                    {% endif %}
+                                </h4>
+                            </div>
+                            <div class="col-md-6 text-right">
+                                <span class="severity-{{ dup.severity }}">{{ dup.severity }}</span>
+                                <span class="label label-info" style="font-size: 14px; margin-left: 10px;">
+                                    {{ dup.repository_count }} Repositories
+                                </span>
+                                <span class="label label-default" style="font-size: 14px;">
+                                    {{ dup.finding_count }} Findings
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5><strong>Affected Repositories</strong></h5>
+                                <ul class="repository-list">
+                                    {% for repo in dup.repositories|slice:":10" %}
+                                    <li>
+                                        <i class="fa-solid fa-folder"></i>
+                                        <a href="{% url 'view_product' repo.id %}">{{ repo.name }}</a>
+                                        {% if repo.tier %}
+                                            <span class="label label-{{ repo.tier }}">{{ repo.tier|upper }}</span>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                    {% if dup.repository_count > 10 %}
+                                    <li><em>... and {{ dup.repository_count|add:"-10" }} more</em></li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h5><strong>Sample Findings</strong></h5>
+                                <ul class="repository-list">
+                                    {% for finding in dup.sample_findings %}
+                                    <li>
+                                        <a href="{% url 'view_finding' finding.id %}">
+                                            {{ finding.title|truncatechars:80 }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">
+                                            in {{ finding.product_name }}
+                                            {% if finding.epss_score %}
+                                                | EPSS: {{ finding.epss_score|floatformat:4 }}
+                                            {% endif %}
+                                        </small>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-12">
+                                <a href="{% url 'simple_search' %}?query={{ dup.cve }}" class="btn btn-sm btn-primary">
+                                    <i class="fa-solid fa-search"></i> View All {{ dup.finding_count }} Findings
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    No cross-repository duplicates found with the current filters.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block postscript %}
+    {{ block.super }}
+    <script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap.min.js"></script>
+{% endblock %}

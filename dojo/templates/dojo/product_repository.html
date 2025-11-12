@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load display_tags %}
+{% load static %}
+
+{% block add_styles %}
+    {{ block.super }}
+    <style>
+        .signal-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            margin: 2px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        .signal-active {
+            background-color: #5cb85c;
+            color: white;
+        }
+        .signal-inactive {
+            background-color: #d9534f;
+            color: white;
+        }
+        .tier-badge {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 8px 16px;
+        }
+        .tier-1 { background-color: #d9534f; color: white; }
+        .tier-2 { background-color: #f0ad4e; color: white; }
+        .tier-3 { background-color: #5bc0de; color: white; }
+        .tier-4 { background-color: #5cb85c; color: white; }
+        .tier-archived { background-color: #777; color: white; }
+        .stat-card {
+            text-align: center;
+            padding: 15px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #337ab7;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #777;
+            text-transform: uppercase;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    {{ block.super }}
+
+    <div class="panel panel-default">
+        <div class="panel-heading tight">
+            <div class="clearfix">
+                <h3 class="has-filters">
+                    Repository Health: {{ product.name }}
+                    <div class="dropdown pull-right">
+                        <button class="btn btn-primary" onclick="window.location.href='{% url 'sync_product_repository' product.id %}'">
+                            <i class="fa-solid fa-sync"></i> Sync Now
+                        </button>
+                    </div>
+                </h3>
+            </div>
+        </div>
+
+        <div class="panel-body">
+            <!-- Repository Overview -->
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>Repository Information</h4>
+                    <table class="table table-striped">
+                        <tr>
+                            <th style="width: 200px;">GitHub URL</th>
+                            <td>
+                                {% if product.github_url %}
+                                    <a href="{{ product.github_url }}" target="_blank">{{ product.github_url }}</a>
+                                {% else %}
+                                    <em>Not configured</em>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Business Criticality</th>
+                            <td>
+                                <span class="label tier-badge tier-{{ product.business_criticality|slugify }}">
+                                    {{ product.get_business_criticality_display|upper }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Primary Language</th>
+                            <td>{{ product.primary_language|default:"Unknown" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Primary Framework</th>
+                            <td>{{ product.primary_framework|default:"Not detected" }}</td>
+                        </tr>
+                        <tr>
+                            <th>README Summary</th>
+                            <td>{{ product.readme_summary|default:"No summary available" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Activity Metrics -->
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>Repository Activity</h4>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel panel-default stat-card">
+                        <div class="stat-value">{{ product.days_since_last_commit|default:"N/A" }}</div>
+                        <div class="stat-label">Days Since Last Commit</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel panel-default stat-card">
+                        <div class="stat-value">{{ product.active_contributors_90d|default:"0" }}</div>
+                        <div class="stat-label">Active Contributors (90d)</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel panel-default stat-card">
+                        <div class="stat-value">{{ product.last_commit_date|date:"Y-m-d"|default:"Never" }}</div>
+                        <div class="stat-label">Last Commit Date</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="panel panel-default stat-card">
+                        <div class="stat-value">{{ product.ownership_confidence|default:"0" }}%</div>
+                        <div class="stat-label">Ownership Confidence</div>
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- Binary Signals -->
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>Repository Signals</h4>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <strong>Deployment Indicators</strong>
+                        </div>
+                        <div class="panel-body">
+                            <span class="signal-badge {% if product.has_dockerfile %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_dockerfile %}check{% else %}times{% endif %}"></i> Dockerfile
+                            </span>
+                            <span class="signal-badge {% if product.has_kubernetes_config %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_kubernetes_config %}check{% else %}times{% endif %}"></i> Kubernetes
+                            </span>
+                            <span class="signal-badge {% if product.has_ci_cd %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_ci_cd %}check{% else %}times{% endif %}"></i> CI/CD
+                            </span>
+                            <span class="signal-badge {% if product.has_terraform %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_terraform %}check{% else %}times{% endif %}"></i> Terraform
+                            </span>
+                            <span class="signal-badge {% if product.has_deployment_scripts %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_deployment_scripts %}check{% else %}times{% endif %}"></i> Deployment Scripts
+                            </span>
+                            <span class="signal-badge {% if product.has_procfile %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_procfile %}check{% else %}times{% endif %}"></i> Procfile
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <strong>Production Readiness</strong>
+                        </div>
+                        <div class="panel-body">
+                            <span class="signal-badge {% if product.has_environments %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_environments %}check{% else %}times{% endif %}"></i> Environments
+                            </span>
+                            <span class="signal-badge {% if product.has_releases %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_releases %}check{% else %}times{% endif %}"></i> Releases
+                            </span>
+                            <span class="signal-badge {% if product.has_branch_protection %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_branch_protection %}check{% else %}times{% endif %}"></i> Branch Protection
+                            </span>
+                            <span class="signal-badge {% if product.has_monitoring_config %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_monitoring_config %}check{% else %}times{% endif %}"></i> Monitoring
+                            </span>
+                            <span class="signal-badge {% if product.has_ssl_config %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_ssl_config %}check{% else %}times{% endif %}"></i> SSL/TLS
+                            </span>
+                            <span class="signal-badge {% if product.has_database_migrations %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_database_migrations %}check{% else %}times{% endif %}"></i> DB Migrations
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <strong>Active Development</strong>
+                        </div>
+                        <div class="panel-body">
+                            <span class="signal-badge {% if product.recent_commits_30d %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.recent_commits_30d %}check{% else %}times{% endif %}"></i> Recent Commits (30d)
+                            </span>
+                            <span class="signal-badge {% if product.active_prs_30d %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.active_prs_30d %}check{% else %}times{% endif %}"></i> Active PRs (30d)
+                            </span>
+                            <span class="signal-badge {% if product.multiple_contributors %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.multiple_contributors %}check{% else %}times{% endif %}"></i> Multiple Contributors
+                            </span>
+                            <span class="signal-badge {% if product.has_dependabot_activity %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_dependabot_activity %}check{% else %}times{% endif %}"></i> Dependabot
+                            </span>
+                            <span class="signal-badge {% if product.recent_releases_90d %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.recent_releases_90d %}check{% else %}times{% endif %}"></i> Recent Releases (90d)
+                            </span>
+                            <span class="signal-badge {% if product.consistent_commit_pattern %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.consistent_commit_pattern %}check{% else %}times{% endif %}"></i> Consistent Commits
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <strong>Code Organization</strong>
+                        </div>
+                        <div class="panel-body">
+                            <span class="signal-badge {% if product.has_tests %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_tests %}check{% else %}times{% endif %}"></i> Tests
+                            </span>
+                            <span class="signal-badge {% if product.has_documentation %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_documentation %}check{% else %}times{% endif %}"></i> Documentation
+                            </span>
+                            <span class="signal-badge {% if product.has_api_specs %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_api_specs %}check{% else %}times{% endif %}"></i> API Specs
+                            </span>
+                            <span class="signal-badge {% if product.has_codeowners %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_codeowners %}check{% else %}times{% endif %}"></i> CODEOWNERS
+                            </span>
+                            <span class="signal-badge {% if product.has_security_md %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_security_md %}check{% else %}times{% endif %}"></i> SECURITY.md
+                            </span>
+                            <span class="signal-badge {% if product.is_monorepo %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.is_monorepo %}check{% else %}times{% endif %}"></i> Monorepo
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="panel panel-default">
+                        <div class="panel-heading">
+                            <strong>Security Maturity</strong>
+                        </div>
+                        <div class="panel-body">
+                            <span class="signal-badge {% if product.has_security_scanning %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_security_scanning %}check{% else %}times{% endif %}"></i> Security Scanning
+                            </span>
+                            <span class="signal-badge {% if product.has_secret_scanning %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_secret_scanning %}check{% else %}times{% endif %}"></i> Secret Scanning
+                            </span>
+                            <span class="signal-badge {% if product.has_dependency_scanning %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_dependency_scanning %}check{% else %}times{% endif %}"></i> Dependency Scanning
+                            </span>
+                            <span class="signal-badge {% if product.has_gitleaks_config %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_gitleaks_config %}check{% else %}times{% endif %}"></i> Gitleaks
+                            </span>
+                            <span class="signal-badge {% if product.has_sast_config %}signal-active{% else %}signal-inactive{% endif %}">
+                                <i class="fa-solid fa-{% if product.has_sast_config %}check{% else %}times{% endif %}"></i> SAST
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if product.codeowners_content %}
+            <hr>
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>CODEOWNERS</h4>
+                    <pre style="max-height: 300px; overflow-y: auto; background-color: #f5f5f5; padding: 10px;">{{ product.codeowners_content }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

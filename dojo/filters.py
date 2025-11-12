@@ -1314,6 +1314,17 @@ class ProductFilterHelper(FilterSet):
     not_tag = CharFilter(field_name="tags__name", lookup_expr="icontains", label="Not tag name contains", exclude=True)
     outside_of_sla = ProductSLAFilter(label="Outside of SLA")
     has_tags = BooleanFilter(field_name="tags", lookup_expr="isnull", exclude=True, label="Has tags")
+    # Repository health filters
+    primary_language = CharFilter(field_name="primary_language", lookup_expr="icontains", label="Primary Language")
+    has_dockerfile = BooleanFilter(field_name="has_dockerfile", label="Has Dockerfile")
+    has_kubernetes_config = BooleanFilter(field_name="has_kubernetes_config", label="Has Kubernetes Config")
+    has_ci_cd = BooleanFilter(field_name="has_ci_cd", label="Has CI/CD")
+    has_tests = BooleanFilter(field_name="has_tests", label="Has Tests")
+    has_security_scanning = BooleanFilter(field_name="has_security_scanning", label="Has Security Scanning")
+    has_environments = BooleanFilter(field_name="has_environments", label="Has Environments")
+    has_releases = BooleanFilter(field_name="has_releases", label="Has Releases")
+    recent_commits_30d = BooleanFilter(field_name="recent_commits_30d", label="Recent Commits (30d)")
+    github_url = CharFilter(field_name="github_url", lookup_expr="icontains", label="GitHub URL Contains")
     o = OrderingFilter(
         # tuple-mapping retains order
         fields=(
@@ -1327,6 +1338,9 @@ class ProductFilterHelper(FilterSet):
             ("external_audience", "external_audience"),
             ("internet_accessible", "internet_accessible"),
             ("findings_count", "findings_count"),
+            ("primary_language", "primary_language"),
+            ("days_since_last_commit", "days_since_last_commit"),
+            ("active_contributors_90d", "active_contributors_90d"),
         ),
         field_labels={
             "name": labels.ASSET_FILTERS_NAME_LABEL,
@@ -1339,6 +1353,9 @@ class ProductFilterHelper(FilterSet):
             "external_audience": "External Audience ",
             "internet_accessible": "Internet Accessible ",
             "findings_count": "Findings Count ",
+            "primary_language": "Primary Language ",
+            "days_since_last_commit": "Days Since Last Commit ",
+            "active_contributors_90d": "Active Contributors (90d) ",
         },
     )
 
