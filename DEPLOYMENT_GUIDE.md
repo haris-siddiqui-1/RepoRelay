@@ -145,8 +145,11 @@ docker-compose exec uwsgi bash -c "python manage.py sync_github_repositories --d
 ### 6.2 Run Initial GitHub Sync
 
 ```bash
-# Sync all repositories (this will take 10-30 minutes for 2,451 repos)
+# Initial full sync with GraphQL (default, takes 15-20 hours for 2,451 repos)
 docker-compose exec uwsgi bash -c "python manage.py sync_github_repositories"
+
+# OR use REST API (6-9 hours for 2,451 repos)
+docker-compose exec uwsgi bash -c "python manage.py sync_github_repositories --use-rest"
 
 # Monitor progress in logs
 docker-compose logs -f uwsgi | grep "Syncing repository"
@@ -157,6 +160,15 @@ docker-compose logs -f uwsgi | grep "Syncing repository"
 - Created: ~2,451 (first run)
 - Updated: 0 (first run)
 - Errors: Should be minimal
+- Time: 15-20 hours (GraphQL) or 6-9 hours (REST) for initial sync
+
+**For Daily Operations (After Initial Sync):**
+```bash
+# Incremental sync with GraphQL (recommended - completes in <5 minutes)
+docker-compose exec uwsgi bash -c "python manage.py sync_github_repositories --incremental"
+```
+
+**Note**: GraphQL is optimized for daily incremental syncs (2x faster than REST). For the one-time initial sync, REST may be faster, but GraphQL is still recommended for establishing the baseline.
 
 ### 6.3 Fetch EPSS Scores
 

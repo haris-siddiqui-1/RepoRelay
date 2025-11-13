@@ -1,0 +1,160 @@
+# Organization-Level Batch Query
+# Purpose: Fetch multiple repositories in single query for better performance
+# Estimated cost: Unknown - needs testing (may be more efficient than individual queries)
+# Reference: https://docs.github.com/en/graphql/reference/objects#organization
+
+query GetOrganizationRepositories($org: String!, $cursor: String) {
+  organization(login: $org) {
+
+    # Fetch 100 repositories per page
+    # RATIONALE: Balance between query size and number of API calls
+    # - 2,451 repos / 100 = 25 total queries
+    # - Each query may cost significantly more than single repo query
+    repositories(first: 100, after: $cursor, orderBy: {field: UPDATED_AT, direction: DESC}) {
+
+      # Pagination info
+      pageInfo {
+        hasNextPage      # Whether more pages exist
+        endCursor        # Cursor for next page
+      }
+
+      # Total count of all repos in organization
+      totalCount
+
+      # Repository nodes with nested data
+      nodes {
+        # ===== BASIC METADATA =====
+        name
+        nameWithOwner
+        description
+        url
+        databaseId
+        isArchived
+        updatedAt          # Last update timestamp (for incremental sync)
+        diskUsage
+
+        primaryLanguage {
+          name
+        }
+
+        # ===== COMMIT HISTORY (REDUCED) =====
+        # OPTIMIZATION: Fetch only 20 commits to reduce query cost
+        # TRADEOFF: May not cover full 90 days, but reduces cost significantly
+        defaultBranchRef {
+          name
+          target {
+            ... on Commit {
+              committedDate
+              history(first: 20) {
+                totalCount
+                nodes {
+                  committedDate
+                  author {
+                    name
+                    email
+                    user { login }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        # ===== FILE TREE =====
+        # ⚠️ WARNING: Fetching tree for 100 repos may timeout or exceed size limits
+        # STRATEGY: Only fetch top-level entries, not full recursive tree
+        tree: object(expression: "HEAD:") {
+          ... on Tree {
+            entries {
+              name
+              path
+              type
+            }
+          }
+        }
+
+        # ===== SPECIFIC FILES =====
+        # NOTE: Fetching 4 files × 100 repos = 400 file reads per query
+        # This may be expensive - consider skipping or fetching only if needed
+        codeowners1: object(expression: "HEAD:CODEOWNERS") {
+          ... on Blob { text }
+        }
+        codeowners2: object(expression: "HEAD:.github/CODEOWNERS") {
+          ... on Blob { text }
+        }
+        codeowners3: object(expression: "HEAD:docs/CODEOWNERS") {
+          ... on Blob { text }
+        }
+        readme: object(expression: "HEAD:README.md") {
+          ... on Blob { text }
+        }
+
+        # ===== GITHUB SETTINGS (LIGHTWEIGHT) =====
+        environments(first: 1) { totalCount }
+        releases(first: 3, orderBy: {field: CREATED_AT, direction: DESC}) {
+          totalCount
+          nodes {
+            createdAt
+            tagName
+          }
+        }
+        branchProtectionRules(first: 1) { totalCount }
+        pullRequests(first: 5, states: [OPEN, MERGED], orderBy: {field: UPDATED_AT, direction: DESC}) {
+          totalCount
+          nodes {
+            state
+            updatedAt
+            author { login }
+          }
+        }
+        vulnerabilityAlerts(first: 1) { totalCount }
+      }
+    }
+  }
+
+  # Rate limit monitoring
+  rateLimit {
+    cost
+    remaining
+    resetAt
+  }
+}
+
+# ===== USAGE PATTERN =====
+#
+# 1. First call: cursor = null
+#    Fetches first 100 repos
+#
+# 2. Check pageInfo.hasNextPage
+#    If true, make next call with cursor = pageInfo.endCursor
+#
+# 3. Repeat until hasNextPage = false
+#    Total calls: ~25 for 2,451 repositories
+#
+# ===== ESTIMATED PERFORMANCE =====
+#
+# Single repo query cost: ~40 points
+# Batch query cost (100 repos): Unknown (needs testing)
+#
+# BEST CASE: Batch query scales linearly
+#   - 100 repos × 40 points = 4,000 points per query
+#   - 25 queries × 4,000 = 100,000 total points
+#   - Time: 100,000 / 5,000 = 20 hours ⚠️ Still slow!
+#
+# WORST CASE: Batch query has overhead penalty
+#   - Cost could be 5,000+ points per query
+#   - Would hit rate limits faster than individual queries
+#
+# ===== RECOMMENDATION =====
+#
+# Test this query with 10 repos first to measure actual cost.
+# If cost < 500 points for 10 repos (50 points/repo), batch approach is viable.
+# If cost > 500 points, individual queries may be more efficient.
+#
+# ===== INCREMENTAL SYNC OPTIMIZATION =====
+#
+# For daily syncs, only process repos where:
+#   updatedAt > product.updated (Django model timestamp)
+#
+# Typical daily changes: 10-50 repos (not all 2,451)
+# This makes daily syncs fast (<5 minutes) even if full sync is slow.

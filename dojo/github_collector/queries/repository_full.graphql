@@ -1,0 +1,145 @@
+# Full Repository Query Template
+# Purpose: Fetch all data needed for DefectDojo repository enrichment in single GraphQL call
+# Estimated cost: 30-40 points per repository
+# Reference: https://docs.github.com/en/graphql/reference/objects#repository
+
+query GetRepositoryData($owner: String!, $name: String!) {
+  # Query a single repository by owner and name
+  repository(owner: $owner, name: $name) {
+
+    # ===== BASIC METADATA =====
+    # Used for: Product identification and basic info
+    name                    # Repository name (e.g., "django-DefectDojo")
+    nameWithOwner          # Full name (e.g., "DefectDojo/django-DefectDojo")
+    description            # Repository description
+    url                    # HTML URL (e.g., "https://github.com/DefectDojo/django-DefectDojo")
+    databaseId             # GitHub's internal repository ID
+    isArchived             # Whether repo is archived (maps to lifecycle = RETIREMENT)
+    diskUsage              # Size in kilobytes
+
+    # Primary language detection
+    primaryLanguage {
+      name                 # e.g., "Python", "JavaScript", "Go"
+    }
+
+    # ===== COMMIT HISTORY & CONTRIBUTORS =====
+    # Used for: last_commit_date, active_contributors_90d, days_since_last_commit
+    defaultBranchRef {
+      name                 # Branch name (usually "main" or "master")
+      target {
+        ... on Commit {
+          committedDate    # Most recent commit timestamp
+
+          # Fetch last 50 commits for contributor analysis
+          # LIMITATION: 50 commits may not cover full 90 days for inactive repos
+          # TRADEOFF: Reduces query cost from ~20 points to ~10 points
+          history(first: 50) {
+            totalCount     # Total number of commits in branch
+            nodes {
+              committedDate
+              author {
+                name       # Author name (e.g., "John Doe")
+                email      # ⚠️ MAY BE NULL due to privacy settings
+                user {
+                  login    # GitHub username (fallback identifier)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # ===== FILE TREE (for binary signal detection) =====
+    # Used for: Detecting Dockerfile, K8s configs, CI/CD, tests, etc.
+    # Returns: List of file paths in repository root
+    tree: object(expression: "HEAD:") {
+      ... on Tree {
+        entries {
+          name           # File/directory name
+          path           # Full path from repo root
+          type           # "blob" (file), "tree" (directory), or "commit" (submodule)
+        }
+      }
+    }
+
+    # ===== SPECIFIC FILE CONTENT =====
+    # Check all 3 possible CODEOWNERS locations
+    codeowners1: object(expression: "HEAD:CODEOWNERS") {
+      ... on Blob {
+        text             # File content as string (null if doesn't exist)
+      }
+    }
+    codeowners2: object(expression: "HEAD:.github/CODEOWNERS") {
+      ... on Blob {
+        text
+      }
+    }
+    codeowners3: object(expression: "HEAD:docs/CODEOWNERS") {
+      ... on Blob {
+        text
+      }
+    }
+
+    # README content for summarization
+    readme: object(expression: "HEAD:README.md") {
+      ... on Blob {
+        text             # README content (null if doesn't exist)
+      }
+    }
+
+    # ===== GITHUB SETTINGS & ACTIVITY =====
+
+    # Deployment environments (Tier 1 signal)
+    environments(first: 1) {
+      totalCount         # How many environments exist (0 = no deployments)
+    }
+
+    # Releases (Tier 2 signal)
+    # Fetch last 3 releases to check if any are in last 90 days
+    releases(first: 3, orderBy: {field: CREATED_AT, direction: DESC}) {
+      totalCount         # Total number of releases
+      nodes {
+        createdAt        # Release timestamp
+        tagName          # Version tag (e.g., "v1.0.0")
+      }
+    }
+
+    # Branch protection (Tier 2 signal)
+    branchProtectionRules(first: 1) {
+      totalCount         # >0 = has branch protection
+    }
+
+    # Pull request activity (recent_commits_30d, active_prs_30d signals)
+    # Fetch last 10 PRs to check activity and dependabot presence
+    pullRequests(
+      first: 10,
+      states: [OPEN, MERGED, CLOSED],
+      orderBy: {field: UPDATED_AT, direction: DESC}
+    ) {
+      totalCount         # Total number of PRs
+      nodes {
+        state            # OPEN, MERGED, or CLOSED
+        updatedAt        # Last update timestamp
+        createdAt        # Creation timestamp
+        author {
+          login          # Author username (for dependabot detection)
+        }
+      }
+    }
+
+    # Security scanning (has_secret_scanning signal)
+    # ⚠️ Requires security permissions - may return null
+    vulnerabilityAlerts(first: 1) {
+      totalCount         # >0 = has vulnerability alerts (security scanning enabled)
+    }
+  }
+
+  # ===== RATE LIMIT MONITORING =====
+  # Track query cost and remaining quota
+  rateLimit {
+    cost               # Points consumed by this query
+    remaining          # Points remaining in current hour
+    resetAt            # When quota resets (ISO 8601 timestamp)
+  }
+}

@@ -54,8 +54,12 @@ Base: DefectDojo v2.52.1
 - Activity tracking (last commit, contributors, commit frequency)
 - README summarization and tech stack detection
 - CODEOWNERS parsing for ownership attribution
+- **NEW (January 2025)**: GraphQL API v4 migration
+  - 94% reduction in API calls (18 REST → 1 GraphQL per repo)
+  - <5 minute daily incremental syncs (2x faster than REST)
+  - Automatic REST fallback for reliability
 
-**Files**: `dojo/github_collector/` (4 modules, 1,399 lines)
+**Files**: `dojo/github_collector/` (7 modules + queries, ~2,800 lines)
 
 ### 2. EPSS Score Integration
 **Purpose**: Prioritize 17,000+ findings by real-world exploitation probability

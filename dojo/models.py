@@ -1118,6 +1118,19 @@ class SLA_Configuration(models.Model):
 
 
 class Product(models.Model):
+    """
+    Represents a project, program, or product being tested in DefectDojo.
+
+    Products host all security work and testing history. They can be enriched
+    with GitHub repository metadata via the github_collector module, which adds:
+    - Repository activity metrics (commits, contributors)
+    - 36 binary signals (deployment, security, development indicators)
+    - Tier classification (criticality assessment)
+    - Ownership data (CODEOWNERS parsing)
+
+    See dojo/github_collector/README_GRAPHQL.md for GitHub integration details.
+    """
+
     WEB_PLATFORM = "web"
     IOT = "iot"
     DESKTOP_PLATFORM = "desktop"

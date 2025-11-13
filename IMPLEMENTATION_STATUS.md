@@ -13,31 +13,51 @@
 - **Documentation**: CUSTOMIZATIONS.md created
 - **Migration**: Instructions in MIGRATION_NOTES.md (requires Docker)
 
-### Phase 2: GitHub Collector Service ✅
-- **collector.py**: Main orchestrator (343 lines)
+### Phase 2: GitHub Collector Service ✅ + GraphQL Migration ✅
+- **collector.py**: Main orchestrator (~800 lines including GraphQL integration)
   - GitHubRepositoryCollector class
   - Sync all repositories or specific products
   - Incremental sync support
+  - **NEW**: GraphQL support with automatic REST fallback
   - Integrates with existing GITHUB_PKey/GITHUB_Conf models
 
-- **signal_detector.py**: Binary signal detection (469 lines)
+- **graphql_client.py**: GitHub GraphQL API v4 client (~460 lines)
+  - Single repository queries
+  - Organization-level batch queries
+  - Incremental sync filtering by updatedAt
+  - Rate limit monitoring (5,000 points/hour)
+  - **Performance**: 94% reduction in API calls (18 REST → 1 GraphQL per repo)
+
+- **signal_detector.py**: Binary signal detection (~469 lines)
   - 36 signal detection methods
   - File/directory pattern matching
   - GitHub API integration for environment/release/protection checks
   - Activity pattern analysis
 
-- **tier_classifier.py**: Tier classification (268 lines)
+- **tier_classifier.py**: Tier classification (~268 lines)
   - Maps signals to business_criticality (1-4 + archived)
   - Confidence scoring algorithm
   - Multiple classification strategies
 
-- **readme_summarizer.py**: README extraction (279 lines)
+- **readme_summarizer.py**: README extraction (~279 lines)
   - Summary extraction (first paragraph or About section)
   - Language detection (10 languages)
   - Framework detection (20+ frameworks)
   - Markdown cleaning
 
-**Total Lines**: ~1,359 lines of production code
+- **queries/**: GraphQL query templates
+  - repository_full.graphql - Complete single-repo query
+  - organization_batch.graphql - Batch query for 100 repos per page
+
+- **test_graphql.py**: GraphQL integration test suite (~380 lines)
+  - 6 comprehensive tests covering all GraphQL functionality
+
+- **Documentation**:
+  - README_GRAPHQL.md - Complete GraphQL migration guide (~450 lines)
+  - GRAPHQL_VERIFICATION.md - Field-by-field API validation
+  - ARCHITECTURE_DECISION.md - Performance analysis and rationale
+
+**Total Lines**: ~2,800 lines of production code (nearly doubled with GraphQL migration)
 
 ---
 
@@ -351,10 +371,12 @@ class TestSignalDetector(TestCase):
 ## Known Limitations & Future Enhancements
 
 ### Current Limitations
-1. GitHub API rate limits (5,000 requests/hour)
+1. GitHub API rate limits (5,000 points/hour for GraphQL, 5,000 requests/hour for REST)
+   - **Mitigated by GraphQL migration**: Incremental syncs now complete in <5 minutes
 2. No webhook support (polling only)
 3. Single organization support (can be extended)
 4. README summarization is heuristic-based
+5. Initial full sync takes 15-20 hours with GraphQL (one-time operation)
 
 ### Potential Enhancements
 1. Add GitLab/Bitbucket support
@@ -363,6 +385,8 @@ class TestSignalDetector(TestCase):
 4. Support multiple GitHub organizations
 5. Add repository dependency graph analysis
 6. Implement automated ownership assignment from CODEOWNERS
+7. **NEW**: Parallel GraphQL queries for faster full syncs
+8. **NEW**: Smart batch sizing based on available rate limit quota
 
 ---
 

@@ -1,21 +1,35 @@
 """
 Django management command to sync GitHub repository metadata.
 
+Uses GitHub GraphQL API v4 by default for efficient bulk operations.
+Use --use-rest to fall back to REST API if needed.
+
 Usage:
     python manage.py sync_github_repositories [--org ORG] [--incremental] [--archive-dormant]
 
 Examples:
+    # Daily incremental sync with GraphQL (recommended)
+    python manage.py sync_github_repositories --incremental
+
     # Sync all repositories from configured organization
     python manage.py sync_github_repositories
 
     # Sync specific organization
     python manage.py sync_github_repositories --org myorg
 
-    # Incremental sync (only updated repos)
-    python manage.py sync_github_repositories --incremental
+    # Use REST API instead of GraphQL
+    python manage.py sync_github_repositories --use-rest --incremental
 
     # Archive dormant repositories
     python manage.py sync_github_repositories --archive-dormant
+
+    # Sync single product by ID
+    python manage.py sync_github_repositories --product-id 123
+
+Performance:
+    - GraphQL (default): <5 minutes for 50-100 changed repos (incremental)
+    - REST (--use-rest): ~10 minutes for same workload
+    - See dojo/github_collector/README_GRAPHQL.md for details
 """
 
 import logging
@@ -63,6 +77,11 @@ class Command(BaseCommand):
             type=int,
             help='Sync only a specific product by ID'
         )
+        parser.add_argument(
+            '--use-rest',
+            action='store_true',
+            help='Use REST API instead of GraphQL (default: GraphQL)'
+        )
 
     def handle(self, *args, **options):
         """Execute the sync command."""
@@ -72,6 +91,7 @@ class Command(BaseCommand):
         archive_dormant = options.get('archive_dormant', False)
         dry_run = options.get('dry_run', False)
         product_id = options.get('product_id')
+        use_rest = options.get('use_rest', False)
 
         # Validate configuration
         github_token = token or getattr(settings, 'DD_GITHUB_TOKEN', '')
@@ -94,7 +114,17 @@ class Command(BaseCommand):
 
         # Initialize collector
         try:
-            collector = GitHubRepositoryCollector(github_token=github_token, github_org=github_org)
+            use_graphql = not use_rest  # Default to GraphQL unless --use-rest specified
+            collector = GitHubRepositoryCollector(
+                github_token=github_token,
+                github_org=github_org,
+                use_graphql=use_graphql
+            )
+
+            # Log API choice
+            api_type = "REST API" if use_rest else "GraphQL API"
+            self.stdout.write(f'Using {api_type} for sync')
+
         except Exception as e:
             raise CommandError(f'Failed to initialize GitHub collector: {e}')
 

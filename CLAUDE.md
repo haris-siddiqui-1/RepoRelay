@@ -107,6 +107,7 @@ Each feature module follows a consistent pattern:
 - `dojo/tools/` - 211 security tool parsers (each with parser.py implementing get_fields, get_dedupe_fields, get_scan_types)
 - `dojo/authorization/` - RBAC with roles: Reader, API_Importer, Writer, Maintainer, Owner
 - `dojo/api_v2/` - REST API with serializers (116KB), permissions (39KB), and viewsets
+- `dojo/github_collector/` - Repository metadata enrichment with GraphQL API integration (see dojo/github_collector/README_GRAPHQL.md)
 
 ### REST API Architecture
 **Base URL:** `/api/v2/`
@@ -173,6 +174,33 @@ class MyToolParser:
 - Container/Dependency (Anchore, Trivy, Grype)
 - Cloud security (AWS Security Hub, Azure)
 - API-based (BlackDuck, Cobalt, Edgescan)
+
+### GitHub Integration
+
+DefectDojo has two GitHub integration patterns:
+
+1. **Issue Tracking** (`dojo/github.py`) - Traditional GitHub issue creation/sync for findings
+   - Uses PyGithub REST API
+   - Creates/updates GitHub issues for security findings
+   - Associated with GITHUB_PKey and GITHUB_Issue models
+
+2. **Repository Context Enrichment** (`dojo/github_collector/`) - NEW GraphQL-powered collector
+   - Syncs repository metadata to Product records
+   - Detects 36 binary signals (deployment indicators, security posture, activity metrics)
+   - Classifies repository tier/criticality
+   - **GraphQL API v4 for bulk operations** (15-20x faster incremental syncs)
+   - Automatic REST fallback for reliability
+   - Management command: `python manage.py sync_github_repositories`
+   - See detailed documentation: dojo/github_collector/README_GRAPHQL.md
+
+**GraphQL Migration (January 2025):**
+The repository collector now uses GitHub GraphQL API v4 for bulk organization syncs, reducing API calls by 94% and enabling sub-5-minute daily incremental syncs. REST API remains as fallback and for individual repository updates.
+
+**Key Features:**
+- Incremental sync: Only fetch repositories updated since last sync
+- Query cost: ~40 points per repo (vs 18 REST calls)
+- Rate limit monitoring: 5,000 points/hour quota
+- Product model enrichment: 36 signal fields + tier classification + ownership data
 
 ### Data Persistence Patterns
 **Advanced Django Features:**

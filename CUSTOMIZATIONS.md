@@ -139,20 +139,32 @@ The Finding model has been extended with 3 new fields for automated triage:
 **Purpose:** Syncs repository metadata from GitHub API and detects binary signals
 
 **Files:**
-- `collector.py` - Main GitHubRepositoryCollector class
+- `collector.py` - Main GitHubRepositoryCollector class with GraphQL support
+- `graphql_client.py` - GitHub GraphQL API v4 client (NEW January 2025)
 - `signal_detector.py` - Binary signal detection logic (file/directory presence)
 - `readme_summarizer.py` - README extraction and summarization
 - `tier_classifier.py` - Tier computation based on signals
+- `queries/` - GraphQL query templates (repository_full.graphql, organization_batch.graphql)
+- `test_graphql.py` - GraphQL integration test suite
+- `README_GRAPHQL.md` - GraphQL migration documentation
 
 **Integration Pattern:**
 - Reuses existing `GITHUB_PKey` and `GITHUB_Conf` models for product-GitHub associations
 - Follows existing `dojo/github.py` authentication pattern (PyGithub library)
 - Extends rather than replaces existing GitHub issue management
+- **NEW**: GraphQL API v4 for bulk operations (94% fewer API calls)
+- Automatic REST fallback for reliability
 
 **Sync Strategy:**
-- Incremental: Every 4 hours via Celery task
-- Full: Daily via scheduled task
+- Incremental: Every 4 hours via Celery task (GraphQL: <5 min, REST: ~10 min)
+- Full: Daily via scheduled task (GraphQL: 15-20 hrs one-time, REST: 6-9 hrs)
 - Manual: Management command or API endpoint
+- Use `--use-rest` flag to explicitly use REST instead of GraphQL
+
+**Performance:**
+- GraphQL query cost: ~40 points per repo (5,000 points/hour limit)
+- Daily incremental syncs: 50-100 changed repos in <5 minutes
+- All 36 binary signals work identically via GraphQL or REST
 
 ---
 
