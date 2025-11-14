@@ -63,6 +63,7 @@ class GitHubGraphQLClient:
         self.queries_dir = Path(__file__).parent / "queries"
         self.repository_query = self._load_query("repository_full.graphql")
         self.organization_query = self._load_query("organization_batch.graphql")
+        self.dependabot_alerts_query = self._load_query("dependabot_alerts.graphql")
 
         logger.info("Initialized GitHub GraphQL client")
 
@@ -480,3 +481,185 @@ class GitHubGraphQLClient:
         # Warn if running low
         if remaining < 500:
             logger.warning(f"Rate limit running low: {remaining} points remaining (resets at {reset_at})")
+
+    def get_dependabot_alerts(
+        self,
+        owner: str,
+        name: str,
+        states: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch Dependabot vulnerability alerts for a repository.
+
+        Args:
+            owner: Repository owner (organization or user)
+            name: Repository name
+            states: Filter by alert states (OPEN, DISMISSED, FIXED, AUTO_DISMISSED).
+                   Default: None (fetches all states)
+
+        Returns:
+            List of parsed Dependabot alert dictionaries
+        """
+        logger.debug(f"Fetching Dependabot alerts for {owner}/{name} (states={states})")
+
+        alerts = []
+        cursor = None
+        has_next_page = True
+        page_count = 0
+
+        try:
+            while has_next_page:
+                page_count += 1
+                variables = {
+                    "owner": owner,
+                    "name": name,
+                    "cursor": cursor,
+                    "states": states  # Can be None
+                }
+
+                result = self.execute_query(self.dependabot_alerts_query, variables)
+
+                # Extract data
+                repo_data = result.get("data", {}).get("repository")
+                if not repo_data:
+                    logger.warning(f"Repository {owner}/{name} not found or not accessible")
+                    break
+
+                vulnerability_alerts = repo_data.get("vulnerabilityAlerts", {})
+                page_info = vulnerability_alerts.get("pageInfo", {})
+                nodes = vulnerability_alerts.get("nodes", [])
+                total_count = vulnerability_alerts.get("totalCount", 0)
+
+                # Parse each alert
+                for node in nodes:
+                    parsed = self._parse_dependabot_alert(node, repo_data.get("databaseId"))
+                    if parsed:
+                        alerts.append(parsed)
+
+                # Check pagination
+                has_next_page = page_info.get("hasNextPage", False)
+                cursor = page_info.get("endCursor")
+
+                # Log progress
+                rate_limit = result.get("data", {}).get("rateLimit", {})
+                self._log_rate_limit(rate_limit, page=page_count)
+
+                logger.info(f"Page {page_count}: Fetched {len(nodes)} alerts, "
+                           f"{len(alerts)} total (out of {total_count})")
+
+            logger.info(f"Completed Dependabot alert fetch: {len(alerts)} alerts for {owner}/{name}")
+            return alerts
+
+        except requests.RequestException as e:
+            logger.error(f"HTTP error fetching Dependabot alerts for {owner}/{name}: {e}")
+            return alerts
+        except ValueError as e:
+            logger.error(f"GraphQL error fetching Dependabot alerts for {owner}/{name}: {e}")
+            return alerts
+        except Exception as e:
+            logger.error(f"Unexpected error fetching Dependabot alerts for {owner}/{name}: {e}", exc_info=True)
+            return alerts
+
+    def _parse_dependabot_alert(self, alert_data: Dict[str, Any], repo_id: int) -> Dict[str, Any]:
+        """
+        Parse Dependabot alert data into structured format.
+
+        Args:
+            alert_data: Raw GraphQL alert node
+            repo_id: Repository database ID
+
+        Returns:
+            Parsed alert dictionary
+        """
+        # Security advisory
+        advisory = alert_data.get("securityAdvisory", {})
+
+        # Vulnerable package
+        vulnerability = alert_data.get("securityVulnerability", {})
+        package = vulnerability.get("package", {})
+        first_patched = vulnerability.get("firstPatchedVersion", {})
+
+        # Extract CVE and CWE identifiers
+        cve_ids = []
+        ghsa_id = advisory.get("ghsaId", "")
+        for identifier in advisory.get("identifiers", []):
+            if identifier.get("type") == "CVE":
+                cve_ids.append(identifier.get("value"))
+
+        cwe_ids = []
+        for cwe in advisory.get("cwes", {}).get("nodes", []):
+            cwe_ids.append(cwe.get("cweId"))
+
+        # Extract reference URLs
+        references = [ref.get("url") for ref in advisory.get("references", []) if ref.get("url")]
+
+        # CVSS score
+        cvss = advisory.get("cvss", {})
+        cvss_score = cvss.get("score") if cvss else None
+        cvss_vector = cvss.get("vectorString") if cvss else None
+
+        # Dismissal information
+        dismisser = alert_data.get("dismisser", {})
+        dismisser_login = dismisser.get("login") if dismisser else None
+
+        parsed = {
+            # Alert identification
+            "github_alert_id": str(alert_data.get("number", "")),  # Alert number in repo
+            "alert_node_id": alert_data.get("id", ""),  # GraphQL node ID
+            "repository_id": repo_id,
+            "alert_type": "dependabot",
+
+            # State
+            "state": alert_data.get("state", "").lower(),  # OPEN -> open
+
+            # Timestamps
+            "created_at": alert_data.get("createdAt"),
+            "dismissed_at": alert_data.get("dismissedAt"),
+            "fixed_at": alert_data.get("fixedAt"),
+
+            # Dismissal
+            "dismiss_reason": alert_data.get("dismissReason", "").lower() if alert_data.get("dismissReason") else None,
+            "dismiss_comment": alert_data.get("dismissComment"),
+            "dismisser": dismisser_login,
+
+            # Security advisory
+            "ghsa_id": ghsa_id,
+            "cve": cve_ids[0] if cve_ids else None,  # Primary CVE
+            "cve_ids": cve_ids,  # All CVEs
+            "cwe": cwe_ids[0] if cwe_ids else None,  # Primary CWE
+            "cwe_ids": cwe_ids,  # All CWEs
+            "title": advisory.get("summary", ""),
+            "description": advisory.get("description", ""),
+            "severity": advisory.get("severity", "").lower(),
+
+            # CVSS
+            "cvss_score": cvss_score,
+            "cvss_vector": cvss_vector,
+
+            # Package information
+            "package_name": package.get("name", ""),
+            "package_ecosystem": package.get("ecosystem", ""),
+            "vulnerable_version_range": vulnerability.get("vulnerableVersionRange", ""),
+            "patched_version": first_patched.get("identifier") if first_patched else None,
+            "vulnerable_requirements": alert_data.get("vulnerableRequirements"),
+
+            # File location
+            "manifest_filename": alert_data.get("vulnerableManifestFilename", ""),
+            "manifest_path": alert_data.get("vulnerableManifestPath", ""),
+
+            # References
+            "references": references,
+
+            # Advisory timestamps
+            "advisory_published_at": advisory.get("publishedAt"),
+            "advisory_updated_at": advisory.get("updatedAt"),
+            "advisory_withdrawn_at": advisory.get("withdrawnAt"),
+
+            # HTML URL (construct from repo and alert number)
+            "html_url": f"https://github.com/{alert_data.get('repository', {}).get('nameWithOwner', '')}/security/dependabot/{alert_data.get('number', '')}",
+
+            # Raw data for future reference
+            "raw_data": alert_data,
+        }
+
+        return parsed

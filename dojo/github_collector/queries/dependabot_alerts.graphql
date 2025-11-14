@@ -1,0 +1,153 @@
+# Dependabot Alerts Query
+# Purpose: Fetch Dependabot security alerts for a repository
+# Estimated cost: 5-10 points per repository (lightweight compared to full repo query)
+# Reference: https://docs.github.com/en/graphql/reference/objects#repository
+
+query GetDependabotAlerts($owner: String!, $name: String!, $cursor: String, $states: [RepositoryVulnerabilityAlertState!]) {
+  repository(owner: $owner, name: $name) {
+    # Repository identification
+    databaseId
+    nameWithOwner
+
+    # Dependabot vulnerability alerts
+    # NOTE: Requires repository:read permissions and security_events scope
+    vulnerabilityAlerts(
+      first: 100,
+      after: $cursor,
+      states: $states  # Filter by states: OPEN, DISMISSED, FIXED, AUTO_DISMISSED
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+
+      totalCount
+
+      nodes {
+        # Alert identification
+        id                          # GraphQL node ID (e.g., "RA_kwDOABCDEF...")
+        number                      # Alert number within repository (for URL construction)
+        state                       # OPEN, DISMISSED, FIXED, or AUTO_DISMISSED
+
+        # Timestamps
+        createdAt                   # When alert was created
+        dismissedAt                 # When alert was dismissed (null if not dismissed)
+        fixedAt                     # When alert was fixed (null if not fixed)
+
+        # Dismissal information
+        dismissReason               # REASON: fix_started, inaccurate, no_bandwidth, not_used, tolerable_risk
+        dismissComment              # Optional comment from dismisser
+        dismisser {
+          login                     # User who dismissed the alert
+        }
+
+        # Security advisory details
+        securityAdvisory {
+          ghsaId                    # GHSA identifier (e.g., "GHSA-xxxx-xxxx-xxxx")
+          summary                   # Short summary of vulnerability
+          description               # Detailed description
+          severity                  # CRITICAL, HIGH, MODERATE, LOW
+
+          # CVE information
+          identifiers {
+            type                    # CVE or GHSA
+            value                   # CVE-YYYY-NNNNN or GHSA-xxxx-xxxx-xxxx
+          }
+
+          # CWE classification
+          cwes(first: 5) {
+            nodes {
+              cweId                 # CWE-NNN
+              name                  # CWE name
+              description           # CWE description
+            }
+          }
+
+          # Links
+          references {
+            url                     # Reference URL
+          }
+
+          # CVSS score
+          cvss {
+            score                   # CVSS score (0-10)
+            vectorString            # CVSS vector string
+          }
+
+          # Publication dates
+          publishedAt               # When advisory was published
+          updatedAt                 # When advisory was last updated
+          withdrawnAt               # When advisory was withdrawn (null if active)
+        }
+
+        # Vulnerable package information
+        securityVulnerability {
+          package {
+            name                    # Package name (e.g., "django", "lodash")
+            ecosystem               # NPM, PIP, RUBYGEMS, MAVEN, NUGET, COMPOSER, etc.
+          }
+
+          # Version information
+          vulnerableVersionRange    # Version range affected (e.g., ">= 1.0.0, < 1.5.0")
+          firstPatchedVersion {
+            identifier              # First version with fix (e.g., "1.5.0")
+          }
+
+          # Severity
+          severity                  # CRITICAL, HIGH, MODERATE, LOW
+        }
+
+        # Vulnerable manifest file
+        vulnerableManifestFilename  # e.g., "package.json", "requirements.txt", "Gemfile.lock"
+        vulnerableManifestPath      # Full path to manifest file
+
+        # Requirements (for ecosystem-specific data)
+        vulnerableRequirements      # e.g., "django >= 1.0.0"
+      }
+    }
+  }
+
+  # Rate limit monitoring
+  rateLimit {
+    cost
+    remaining
+    resetAt
+  }
+}
+
+# ===== USAGE PATTERN =====
+#
+# 1. Fetch all alerts (default: OPEN state only)
+#    states = ["OPEN"]
+#
+# 2. Incremental sync: Fetch all states to detect state changes
+#    states = ["OPEN", "DISMISSED", "FIXED", "AUTO_DISMISSED"]
+#
+# 3. Pagination: Use cursor for repos with >100 alerts
+#
+# ===== STATE MAPPING TO DEFECTDOJO =====
+#
+# Dependabot State -> DefectDojo Finding Status
+# - OPEN            -> Active
+# - DISMISSED       -> Risk Accepted (with reason in notes)
+# - FIXED           -> Mitigated
+# - AUTO_DISMISSED  -> False Positive or Out of Scope
+#
+# ===== DEDUPLICATION STRATEGY =====
+#
+# unique_id_from_tool = f"github-dependabot-{repo_id}-{alert_number}"
+#
+# This ensures:
+# 1. Same alert in different repos = different findings
+# 2. State changes update existing finding (not create duplicate)
+# 3. Re-scans detect state transitions (open -> fixed)
+#
+# ===== ESTIMATED PERFORMANCE =====
+#
+# Query cost: ~5-10 points per repository
+# Typical repos: 0-50 alerts (1 query)
+# Large repos: 50-500 alerts (5 queries with pagination)
+#
+# For 2,451 repos:
+# - Avg 10 alerts/repo × 5 points = 12,255 points (~2.5 hours)
+# - With incremental sync: Only repos with alert changes (~100 repos/day × 5 = 500 points = 6 minutes)

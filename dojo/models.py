@@ -1742,6 +1742,383 @@ class Repository(models.Model):
                 self.secret_scanning_alert_count)
 
 
+class GitHubAlert(models.Model):
+    """
+    Stores raw GitHub security alerts (Dependabot, CodeQL, Secret Scanning).
+
+    This is an intermediate model that stores GitHub alerts before they are
+    mapped to DefectDojo Findings (Phase 3). Preserves all GitHub metadata
+    for accurate sync and state management.
+
+    Alert lifecycle:
+    1. Fetched from GitHub API (GraphQL for Dependabot, REST for CodeQL/Secrets)
+    2. Stored in this model with raw JSON data
+    3. Mapped to Finding in Phase 3 using unique_id_from_tool
+    4. State changes synced bidirectionally
+    """
+
+    # Alert type choices
+    DEPENDABOT = "dependabot"
+    CODEQL = "codeql"
+    SECRET_SCANNING = "secret_scanning"
+
+    ALERT_TYPE_CHOICES = (
+        (DEPENDABOT, _("Dependabot Alert")),
+        (CODEQL, _("CodeQL Alert")),
+        (SECRET_SCANNING, _("Secret Scanning Alert")),
+    )
+
+    # Alert state choices (GitHub states)
+    OPEN = "open"
+    DISMISSED = "dismissed"
+    FIXED = "fixed"
+
+    STATE_CHOICES = (
+        (OPEN, _("Open")),
+        (DISMISSED, _("Dismissed")),
+        (FIXED, _("Fixed")),
+    )
+
+    # Core identification
+    repository = models.ForeignKey(
+        Repository,
+        on_delete=models.CASCADE,
+        related_name="github_alerts",
+        verbose_name=_("Repository"),
+        help_text=_("Repository this alert belongs to")
+    )
+
+    alert_type = models.CharField(
+        max_length=20,
+        choices=ALERT_TYPE_CHOICES,
+        verbose_name=_("Alert Type"),
+        help_text=_("Type of GitHub security alert")
+    )
+
+    github_alert_id = models.CharField(
+        max_length=100,
+        verbose_name=_("GitHub Alert ID"),
+        help_text=_("GitHub's unique identifier for this alert (alert number or node ID)")
+    )
+
+    # Unique constraint: one alert per repo+type+id combination
+    class Meta:
+        unique_together = [['repository', 'alert_type', 'github_alert_id']]
+        ordering = ['-created_at']
+        verbose_name = _("GitHub Alert")
+        verbose_name_plural = _("GitHub Alerts")
+        indexes = [
+            models.Index(fields=['repository', 'alert_type']),
+            models.Index(fields=['state']),
+            models.Index(fields=['severity']),
+            models.Index(fields=['created_at']),
+        ]
+
+    # Alert metadata
+    state = models.CharField(
+        max_length=20,
+        choices=STATE_CHOICES,
+        default=OPEN,
+        verbose_name=_("State"),
+        help_text=_("Current state of the alert in GitHub")
+    )
+
+    severity = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name=_("Severity"),
+        help_text=_("Alert severity (Critical, High, Medium, Low)")
+    )
+
+    # Common fields across all alert types
+    title = models.CharField(
+        max_length=500,
+        verbose_name=_("Title"),
+        help_text=_("Alert title or description")
+    )
+
+    description = models.TextField(
+        blank=True,
+        verbose_name=_("Description"),
+        help_text=_("Detailed description of the alert")
+    )
+
+    html_url = models.URLField(
+        max_length=600,
+        verbose_name=_("GitHub URL"),
+        help_text=_("Direct link to alert on GitHub")
+    )
+
+    # Timestamps from GitHub
+    created_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Created At"),
+        help_text=_("When alert was created in GitHub")
+    )
+
+    updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Updated At"),
+        help_text=_("Last update time in GitHub")
+    )
+
+    dismissed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Dismissed At"),
+        help_text=_("When alert was dismissed in GitHub")
+    )
+
+    fixed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Fixed At"),
+        help_text=_("When alert was marked as fixed in GitHub")
+    )
+
+    # Type-specific fields
+    # Dependabot: CVE, package info
+    cve = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("CVE"),
+        help_text=_("CVE identifier (for Dependabot alerts)")
+    )
+
+    package_name = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Package Name"),
+        help_text=_("Affected package name (for Dependabot alerts)")
+    )
+
+    package_ecosystem = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("Package Ecosystem"),
+        help_text=_("Package ecosystem: npm, pip, maven, etc.")
+    )
+
+    vulnerable_version = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Vulnerable Version"),
+        help_text=_("Current vulnerable version")
+    )
+
+    patched_version = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Patched Version"),
+        help_text=_("Fixed version available")
+    )
+
+    # CodeQL: CWE, file location
+    cwe = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name=_("CWE"),
+        help_text=_("CWE identifier (for CodeQL alerts)")
+    )
+
+    rule_id = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Rule ID"),
+        help_text=_("CodeQL rule identifier")
+    )
+
+    file_path = models.CharField(
+        max_length=1000,
+        blank=True,
+        verbose_name=_("File Path"),
+        help_text=_("Path to affected file")
+    )
+
+    start_line = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Start Line"),
+        help_text=_("Starting line number")
+    )
+
+    end_line = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("End Line"),
+        help_text=_("Ending line number")
+    )
+
+    # Secret Scanning: secret type
+    secret_type = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Secret Type"),
+        help_text=_("Type of secret detected (for Secret Scanning alerts)")
+    )
+
+    # Raw JSON data from GitHub API (preserves all metadata)
+    raw_data = models.JSONField(
+        default=dict,
+        verbose_name=_("Raw GitHub Data"),
+        help_text=_("Complete JSON response from GitHub API for this alert")
+    )
+
+    # DefectDojo integration
+    finding = models.ForeignKey(
+        'Finding',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="github_alerts",
+        verbose_name=_("Related Finding"),
+        help_text=_("DefectDojo Finding created from this alert (Phase 3)")
+    )
+
+    # Local timestamps
+    synced_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_("Last Synced"),
+        help_text=_("Last time this alert was synced from GitHub")
+    )
+
+    created = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Created in DefectDojo")
+    )
+
+    def __str__(self):
+        return f"{self.get_alert_type_display()} #{self.github_alert_id} - {self.title[:50]}"
+
+    @property
+    def unique_id_for_deduplication(self):
+        """Generate unique_id_from_tool for Finding deduplication"""
+        return f"github-{self.alert_type}-{self.repository.github_repo_id}-{self.github_alert_id}"
+
+
+class GitHubAlertSync(models.Model):
+    """
+    Tracks sync status for GitHub alerts per repository.
+
+    Enables incremental sync by storing last successful sync timestamp
+    and sync statistics. Used by alerts_collector to determine which
+    repositories need syncing.
+    """
+
+    repository = models.OneToOneField(
+        Repository,
+        on_delete=models.CASCADE,
+        related_name="alert_sync_status",
+        verbose_name=_("Repository")
+    )
+
+    # Sync timestamps per alert type
+    dependabot_last_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Dependabot Last Sync"),
+        help_text=_("Last successful sync of Dependabot alerts")
+    )
+
+    codeql_last_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("CodeQL Last Sync"),
+        help_text=_("Last successful sync of CodeQL alerts")
+    )
+
+    secret_scanning_last_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Secret Scanning Last Sync"),
+        help_text=_("Last successful sync of Secret Scanning alerts")
+    )
+
+    # Sync statistics
+    dependabot_alerts_fetched = models.IntegerField(
+        default=0,
+        verbose_name=_("Dependabot Alerts Fetched"),
+        help_text=_("Total Dependabot alerts fetched in last sync")
+    )
+
+    codeql_alerts_fetched = models.IntegerField(
+        default=0,
+        verbose_name=_("CodeQL Alerts Fetched"),
+        help_text=_("Total CodeQL alerts fetched in last sync")
+    )
+
+    secret_scanning_alerts_fetched = models.IntegerField(
+        default=0,
+        verbose_name=_("Secret Scanning Alerts Fetched"),
+        help_text=_("Total Secret Scanning alerts fetched in last sync")
+    )
+
+    # Error tracking
+    last_sync_error = models.TextField(
+        blank=True,
+        verbose_name=_("Last Sync Error"),
+        help_text=_("Error message from last sync attempt (if any)")
+    )
+
+    last_sync_error_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Sync Error Time")
+    )
+
+    # Rate limit tracking
+    last_rate_limit_hit = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Rate Limit Hit"),
+        help_text=_("Last time we hit GitHub rate limit for this repo")
+    )
+
+    # Sync metadata
+    full_sync_completed = models.BooleanField(
+        default=False,
+        verbose_name=_("Full Sync Completed"),
+        help_text=_("True if initial full sync has been completed")
+    )
+
+    sync_enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Sync Enabled"),
+        help_text=_("False to skip this repository during sync")
+    )
+
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("GitHub Alert Sync Status")
+        verbose_name_plural = _("GitHub Alert Sync Statuses")
+        ordering = ['-updated']
+
+    def __str__(self):
+        return f"Sync status for {self.repository.name}"
+
+    @property
+    def last_successful_sync(self):
+        """Get most recent successful sync across all alert types"""
+        sync_times = [
+            self.dependabot_last_sync,
+            self.codeql_last_sync,
+            self.secret_scanning_last_sync
+        ]
+        valid_times = [t for t in sync_times if t is not None]
+        return max(valid_times) if valid_times else None
+
+    @property
+    def total_alerts_fetched(self):
+        """Total alerts fetched in last sync across all types"""
+        return (self.dependabot_alerts_fetched +
+                self.codeql_alerts_fetched +
+                self.secret_scanning_alerts_fetched)
+
+
 class Product_Member(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     user = models.ForeignKey(Dojo_User, on_delete=models.CASCADE)
