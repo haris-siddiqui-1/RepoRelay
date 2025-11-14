@@ -2036,7 +2036,7 @@ def add_product_group(request, pid):
 # ============================================================================
 
 
-@user_has_permission_or_403(Permissions.Product_View)
+@user_is_authorized(Product, Permissions.Product_View, "pid")
 def view_product_repository(request, pid):
     """
     Display repository health information for a product.
@@ -2052,7 +2052,6 @@ def view_product_repository(request, pid):
     })
 
 
-@user_has_permission_or_403(Permissions.Product_View)
 def repository_dashboard(request):
     """
     Display dashboard view of all repositories with tier classification.
@@ -2076,7 +2075,6 @@ def repository_dashboard(request):
     })
 
 
-@user_has_permission_or_403(Permissions.Finding_View)
 def product_cross_repo_duplicates(request):
     """
     Display cross-repository duplicate findings.

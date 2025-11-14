@@ -1235,6 +1235,9 @@ class Product(models.Model):
         help_text=_("Disable SLA breach notifications if configured in the global settings"))
     async_updating = models.BooleanField(default=False,
                                             help_text=_("Findings under this Product or SLA configuration are asynchronously being updated"))
+    is_repository_placeholder = models.BooleanField(default=False,
+                                                    verbose_name=_("Is Repository Placeholder"),
+                                                    help_text=_("True if this Product was created as 1:1 mapping to a GitHub repository (legacy). Will be migrated to Repository model."))
 
     # Enterprise Context Enrichment - Repository Activity Tracking
     last_commit_date = models.DateTimeField(null=True, blank=True,
@@ -1505,6 +1508,238 @@ class Product(models.Model):
                                           active=True,
                                           sla_expiration_date__lt=timezone.now().date())
         return findings.count() > 0
+
+
+class Repository(models.Model):
+    """
+    Represents a source code repository (typically from GitHub) associated with a Product.
+
+    This model enables the proper 1:many relationship between Products (applications/services)
+    and Repositories. It contains repository-specific metadata, GitHub security alerts data,
+    and enrichment fields migrated from the Product model.
+
+    For GitHub alerts integration, see dojo/github_collector/alerts_collector.py
+    """
+
+    # Tier classification choices
+    TIER1 = "tier1"
+    TIER2 = "tier2"
+    TIER3 = "tier3"
+    TIER4 = "tier4"
+    ARCHIVED = "archived"
+    TIER_CHOICES = (
+        (TIER1, _("Tier 1 - Critical")),
+        (TIER2, _("Tier 2 - High")),
+        (TIER3, _("Tier 3 - Medium")),
+        (TIER4, _("Tier 4 - Low")),
+        (ARCHIVED, _("Archived")),
+    )
+
+    # Core identification
+    name = models.CharField(max_length=255,
+                           verbose_name=_("Repository Name"),
+                           help_text=_("Repository name in 'org/repo' format"))
+    github_repo_id = models.BigIntegerField(unique=True,
+                                            verbose_name=_("GitHub Repository ID"),
+                                            help_text=_("GitHub's internal numeric repository ID"))
+    github_url = models.URLField(max_length=600,
+                                verbose_name=_("GitHub URL"),
+                                help_text=_("Full GitHub repository URL"))
+
+    # Product relationships
+    product = models.ForeignKey(Product,
+                                on_delete=models.CASCADE,
+                                related_name="repositories",
+                                verbose_name=_("Primary Product"),
+                                help_text=_("Primary product/application this repository belongs to"))
+    related_products = models.ManyToManyField(Product,
+                                             related_name="shared_repositories",
+                                             blank=True,
+                                             verbose_name=_("Related Products"),
+                                             help_text=_("Additional products that share this repository (e.g., shared libraries)"))
+
+    # Repository Activity Tracking
+    last_commit_date = models.DateTimeField(null=True, blank=True,
+                                           verbose_name=_("Last Commit Date"),
+                                           help_text=_("Date of the last commit to the repository"))
+    active_contributors_90d = models.IntegerField(default=0,
+                                                  verbose_name=_("Active Contributors (90d)"),
+                                                  help_text=_("Number of active contributors in the last 90 days"))
+    days_since_last_commit = models.IntegerField(null=True, blank=True,
+                                                 verbose_name=_("Days Since Last Commit"),
+                                                 help_text=_("Calculated: days elapsed since last commit"))
+
+    # Repository Metadata
+    readme_summary = models.TextField(max_length=500, blank=True,
+                                     verbose_name=_("README Summary"),
+                                     help_text=_("Auto-generated summary of repository README"))
+    readme_length = models.IntegerField(default=0,
+                                       verbose_name=_("README Length"),
+                                       help_text=_("Character count of README file"))
+    primary_language = models.CharField(max_length=50, blank=True,
+                                       verbose_name=_("Primary Language"),
+                                       help_text=_("Primary programming language detected"))
+    primary_framework = models.CharField(max_length=50, blank=True,
+                                        verbose_name=_("Primary Framework"),
+                                        help_text=_("Primary framework detected from README"))
+
+    # Ownership Tracking
+    codeowners_content = models.TextField(blank=True,
+                                         verbose_name=_("CODEOWNERS Content"),
+                                         help_text=_("Raw content of CODEOWNERS file"))
+    ownership_confidence = models.IntegerField(default=0,
+                                              validators=[MinValueValidator(0), MaxValueValidator(100)],
+                                              verbose_name=_("Ownership Confidence"),
+                                              help_text=_("Confidence score (0-100) for ownership data quality"))
+
+    # Binary Signals: Deployment Indicators
+    has_dockerfile = models.BooleanField(default=False,
+                                        verbose_name=_("Has Dockerfile"),
+                                        help_text=_("Repository contains Dockerfile"))
+    has_kubernetes_config = models.BooleanField(default=False,
+                                               verbose_name=_("Has Kubernetes Config"),
+                                               help_text=_("Repository contains K8s manifests or Helm charts"))
+    has_ci_cd = models.BooleanField(default=False,
+                                   verbose_name=_("Has CI/CD"),
+                                   help_text=_("Repository has CI/CD configuration"))
+    has_terraform = models.BooleanField(default=False,
+                                       verbose_name=_("Has Terraform"),
+                                       help_text=_("Repository contains Terraform IaC"))
+    has_deployment_scripts = models.BooleanField(default=False,
+                                                verbose_name=_("Has Deployment Scripts"),
+                                                help_text=_("Repository contains deployment scripts"))
+    has_procfile = models.BooleanField(default=False,
+                                      verbose_name=_("Has Procfile"),
+                                      help_text=_("Repository contains Procfile for PaaS deployment"))
+
+    # Binary Signals: Production Readiness
+    has_environments = models.BooleanField(default=False,
+                                          verbose_name=_("Has Environments"),
+                                          help_text=_("GitHub environments configured"))
+    has_releases = models.BooleanField(default=False,
+                                      verbose_name=_("Has Releases"),
+                                      help_text=_("GitHub releases exist"))
+    has_branch_protection = models.BooleanField(default=False,
+                                               verbose_name=_("Has Branch Protection"),
+                                               help_text=_("Protected main branch configured"))
+    has_monitoring_config = models.BooleanField(default=False,
+                                               verbose_name=_("Has Monitoring Config"),
+                                               help_text=_("Monitoring configuration present"))
+    has_ssl_config = models.BooleanField(default=False,
+                                        verbose_name=_("Has SSL Config"),
+                                        help_text=_("SSL/TLS configuration present"))
+    has_database_migrations = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Database Migrations"),
+                                                  help_text=_("Database migration files present"))
+
+    # Binary Signals: Active Development
+    recent_commits_30d = models.BooleanField(default=False,
+                                            verbose_name=_("Recent Commits (30d)"),
+                                            help_text=_("Has commits in last 30 days"))
+    active_prs_30d = models.BooleanField(default=False,
+                                        verbose_name=_("Active PRs (30d)"),
+                                        help_text=_("Has PRs in last 30 days"))
+    multiple_contributors = models.BooleanField(default=False,
+                                               verbose_name=_("Multiple Contributors"),
+                                               help_text=_("More than 1 contributor in 90 days"))
+    has_dependabot_activity = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Dependabot Activity"),
+                                                  help_text=_("Dependabot updates detected"))
+    recent_releases_90d = models.BooleanField(default=False,
+                                             verbose_name=_("Recent Releases (90d)"),
+                                             help_text=_("Has releases in last 90 days"))
+    consistent_commit_pattern = models.BooleanField(default=False,
+                                                    verbose_name=_("Consistent Commit Pattern"),
+                                                    help_text=_("Regular commit schedule detected"))
+
+    # Binary Signals: Code Organization
+    has_tests = models.BooleanField(default=False,
+                                   verbose_name=_("Has Tests"),
+                                   help_text=_("Test directories present"))
+    has_documentation = models.BooleanField(default=False,
+                                           verbose_name=_("Has Documentation"),
+                                           help_text=_("Documentation directory or detailed README"))
+    has_api_specs = models.BooleanField(default=False,
+                                       verbose_name=_("Has API Specs"),
+                                       help_text=_("OpenAPI/Swagger specs present"))
+    has_codeowners = models.BooleanField(default=False,
+                                        verbose_name=_("Has CODEOWNERS"),
+                                        help_text=_("CODEOWNERS file present"))
+    has_security_md = models.BooleanField(default=False,
+                                         verbose_name=_("Has SECURITY.md"),
+                                         help_text=_("Security policy documented"))
+    is_monorepo = models.BooleanField(default=False,
+                                     verbose_name=_("Is Monorepo"),
+                                     help_text=_("Multiple projects in single repository"))
+
+    # Binary Signals: Security Maturity
+    has_security_scanning = models.BooleanField(default=False,
+                                               verbose_name=_("Has Security Scanning"),
+                                               help_text=_("Security scanning in CI/CD"))
+    has_secret_scanning = models.BooleanField(default=False,
+                                             verbose_name=_("Has Secret Scanning"),
+                                             help_text=_("Secret scanning enabled"))
+    has_dependency_scanning = models.BooleanField(default=False,
+                                                  verbose_name=_("Has Dependency Scanning"),
+                                                  help_text=_("Dependency scanning configured"))
+    has_gitleaks_config = models.BooleanField(default=False,
+                                             verbose_name=_("Has Gitleaks Config"),
+                                             help_text=_("Gitleaks secret detection configured"))
+    has_sast_config = models.BooleanField(default=False,
+                                         verbose_name=_("Has SAST Config"),
+                                         help_text=_("SAST tools configured"))
+
+    # GitHub Alerts Metadata
+    last_alert_sync = models.DateTimeField(null=True, blank=True,
+                                          verbose_name=_("Last Alert Sync"),
+                                          help_text=_("Timestamp of last GitHub alerts synchronization"))
+    dependabot_alert_count = models.IntegerField(default=0,
+                                                 verbose_name=_("Dependabot Alert Count"),
+                                                 help_text=_("Number of open Dependabot alerts"))
+    codeql_alert_count = models.IntegerField(default=0,
+                                            verbose_name=_("CodeQL Alert Count"),
+                                            help_text=_("Number of open CodeQL alerts"))
+    secret_scanning_alert_count = models.IntegerField(default=0,
+                                                      verbose_name=_("Secret Scanning Alert Count"),
+                                                      help_text=_("Number of open secret scanning alerts"))
+
+    # Pre-computed statistics for dashboard performance
+    cached_finding_counts = models.JSONField(default=dict, blank=True,
+                                            verbose_name=_("Cached Finding Counts"),
+                                            help_text=_("Pre-computed finding counts by severity: {critical: N, high: N, ...}"))
+
+    # Computed tier classification
+    tier = models.CharField(max_length=10, choices=TIER_CHOICES, default=TIER4,
+                          verbose_name=_("Repository Tier"),
+                          help_text=_("Computed criticality tier based on signals and activity"))
+
+    # Timestamps
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = _("Repository")
+        verbose_name_plural = _("Repositories")
+        indexes = [
+            models.Index(fields=["github_repo_id"]),
+            models.Index(fields=["product"]),
+            models.Index(fields=["tier"]),
+            models.Index(fields=["last_alert_sync"]),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse("view_repository", args=[str(self.id)])
+
+    @property
+    def total_alert_count(self):
+        """Total number of open GitHub alerts across all types"""
+        return (self.dependabot_alert_count +
+                self.codeql_alert_count +
+                self.secret_scanning_alert_count)
 
 
 class Product_Member(models.Model):

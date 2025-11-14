@@ -3198,7 +3198,7 @@ class GitHubSyncView(GenericAPIView):
     }
     """
     serializer_class = serializers.GitHubSyncRequestSerializer
-    permission_classes = (IsAuthenticated, permissions.UserHasSuperuserPermission)
+    permission_classes = (IsAuthenticated, permissions.IsSuperUser)
 
     @extend_schema(
         request=serializers.GitHubSyncRequestSerializer,
