@@ -81,13 +81,37 @@ docker compose exec uwsgi bash -c "python manage.py shell"
 docker compose exec uwsgi bash
 ```
 
+### GitHub Integration Commands
+```bash
+# Sync repository metadata (GraphQL-based, incremental)
+docker compose exec uwsgi bash -c "python manage.py sync_github_repositories --incremental"
+
+# Sync GitHub security alerts (incremental)
+docker compose exec uwsgi bash -c "python manage.py sync_github_alerts"
+
+# Sync alerts and create DefectDojo Findings
+docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --create-findings"
+
+# Force full sync (ignores last sync timestamp)
+docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --force --create-findings"
+
+# Sync specific repository
+docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --repository-id 123 --create-findings"
+
+# Dry run (preview without changes)
+docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --dry-run"
+```
+
 ## Architecture Overview
 
 ### Monolithic Models with Domain Modules
 The codebase uses a **monolithic `dojo/models.py`** (238KB) containing 40+ core models, with feature-specific modules that extend functionality:
 
 **Core Entity Hierarchy:**
-- `Product_Type` → `Product` → `Test` → `Finding`
+- `Product_Type` → `Product` → `Repository` → `Test` → `Finding`
+- `Product_Type` → `Product` → `Engagement` → `Test` → `Finding` (traditional path)
+- `Repository` - NEW (January 2025): GitHub repository with 47 enrichment fields, links to Product (1:many)
+- `GitHubAlert` - NEW (January 2025): Raw GitHub security alerts (Dependabot, CodeQL, Secret Scanning)
 - `Engagement` - Time-bound security testing activities
 - `Endpoint` - Network targets and services
 - `Tool_Type`/`Tool_Configuration` - Integration configs for 211+ tools
@@ -107,7 +131,10 @@ Each feature module follows a consistent pattern:
 - `dojo/tools/` - 211 security tool parsers (each with parser.py implementing get_fields, get_dedupe_fields, get_scan_types)
 - `dojo/authorization/` - RBAC with roles: Reader, API_Importer, Writer, Maintainer, Owner
 - `dojo/api_v2/` - REST API with serializers (116KB), permissions (39KB), and viewsets
-- `dojo/github_collector/` - Repository metadata enrichment with GraphQL API integration (see dojo/github_collector/README_GRAPHQL.md)
+- `dojo/github_collector/` - GitHub integration with two major subsystems:
+  - Repository metadata enrichment (collector.py, graphql_client.py) - See README_GRAPHQL.md
+  - Security alerts collection (alerts_collector.py, findings_converter.py) - See README_ALERTS.md
+  - Supports GraphQL API v4 (bulk operations) with REST API fallback
 
 ### REST API Architecture
 **Base URL:** `/api/v2/`
@@ -177,30 +204,44 @@ class MyToolParser:
 
 ### GitHub Integration
 
-DefectDojo has two GitHub integration patterns:
+DefectDojo has three GitHub integration patterns:
 
 1. **Issue Tracking** (`dojo/github.py`) - Traditional GitHub issue creation/sync for findings
    - Uses PyGithub REST API
    - Creates/updates GitHub issues for security findings
    - Associated with GITHUB_PKey and GITHUB_Issue models
 
-2. **Repository Context Enrichment** (`dojo/github_collector/`) - NEW GraphQL-powered collector
-   - Syncs repository metadata to Product records
+2. **Repository Context Enrichment** (`dojo/github_collector/`) - GraphQL-powered metadata collector
+   - Syncs repository metadata to Repository model (separate from Product)
    - Detects 36 binary signals (deployment indicators, security posture, activity metrics)
-   - Classifies repository tier/criticality
+   - Classifies repository tier/criticality (tier1-tier4, archived)
    - **GraphQL API v4 for bulk operations** (15-20x faster incremental syncs)
    - Automatic REST fallback for reliability
    - Management command: `python manage.py sync_github_repositories`
    - See detailed documentation: dojo/github_collector/README_GRAPHQL.md
 
+3. **Security Alerts Collection** (`dojo/github_collector/alerts_collector.py`) - NEW (January 2025)
+   - Fetches GitHub security alerts (Dependabot, CodeQL, Secret Scanning)
+   - Converts alerts to DefectDojo Findings with automatic deduplication
+   - Syncs alert state changes bidirectionally (open/dismissed/fixed)
+   - Supports incremental sync with rate limit management
+   - Management command: `python manage.py sync_github_alerts --create-findings`
+   - See detailed documentation: dojo/github_collector/README_ALERTS.md
+
 **GraphQL Migration (January 2025):**
 The repository collector now uses GitHub GraphQL API v4 for bulk organization syncs, reducing API calls by 94% and enabling sub-5-minute daily incremental syncs. REST API remains as fallback and for individual repository updates.
 
+**GitHub Alerts Integration (January 2025):**
+The alerts collector creates a data hierarchy: Product → Repository → GitHubAlert → Finding. This enables centralized vulnerability management across all GitHub repositories with proper deduplication using unique_id_from_tool format: "github-{type}-{repo_id}-{alert_id}".
+
 **Key Features:**
-- Incremental sync: Only fetch repositories updated since last sync
-- Query cost: ~40 points per repo (vs 18 REST calls)
+- Repository Model: Separate entity with 47 enrichment fields, links to Product (1:many relationship)
+- Incremental sync: Only fetch repositories/alerts updated since last sync
+- Query cost: ~40 points per repo for metadata, ~10 points per repo for Dependabot alerts
 - Rate limit monitoring: 5,000 points/hour quota
-- Product model enrichment: 36 signal fields + tier classification + ownership data
+- Alert types: Dependabot (GraphQL), CodeQL (REST), Secret Scanning (REST)
+- Finding integration: Automatic Test creation per alert type, state synchronization
+- Admin UI: Complete CRUD for Repository, GitHubAlert, GitHubAlertSync models
 
 ### Data Persistence Patterns
 **Advanced Django Features:**
@@ -222,6 +263,58 @@ Complex algorithm for finding duplicate detection:
 - Background Celery task processing
 - Dedicated logging stream for troubleshooting
 - Fields: `hash_code`, `unique_id_from_tool`, configurable deduplication keys
+
+**GitHub Alerts Deduplication:**
+GitHub alerts use a standardized unique_id_from_tool format:
+- Dependabot: `"github-dependabot-{repo_id}-{alert_id}"`
+- CodeQL: `"github-codeql-{repo_id}-{alert_id}"`
+- Secret Scanning: `"github-secret_scanning-{repo_id}-{alert_id}"`
+- Re-imports automatically update existing findings based on this identifier
+- State changes (open→dismissed→fixed) sync bidirectionally between GitHub and DefectDojo
+
+### GitHub Data Models (January 2025)
+
+**Repository Model** (`dojo/models.py`)
+Represents a GitHub repository with enrichment metadata:
+- Core fields: `name`, `github_repo_id` (unique), `github_url`
+- Relationships: `product` (ForeignKey), `related_products` (ManyToMany)
+- Activity tracking: `last_commit_date`, `active_contributors_90d`, `days_since_last_commit`
+- Metadata: `readme_summary`, `primary_language`, `primary_framework`
+- Ownership: `codeowners_content`, `ownership_confidence`
+- 36 binary signals across 5 categories (deployment, production, development, organization, security)
+- Alert metadata: `last_alert_sync`, `dependabot_alert_count`, `codeql_alert_count`, `secret_scanning_alert_count`
+- Pre-computed statistics: `cached_finding_counts` (JSONField)
+- Tier classification: `tier` (tier1, tier2, tier3, tier4, archived)
+
+**GitHubAlert Model** (`dojo/models.py`)
+Stores raw GitHub security alerts:
+- Core fields: `repository` (ForeignKey), `alert_type`, `github_alert_id`, `state`, `severity`
+- Content: `title`, `description`, `html_url`
+- Type-specific: `cve`, `package_name` (Dependabot), `cwe`, `rule_id`, `file_path` (CodeQL), `secret_type` (Secret Scanning)
+- Raw data: `raw_data` (JSONField) - Complete GitHub API response
+- Timestamps: `created_at`, `updated_at`, `dismissed_at`, `fixed_at`
+- Finding link: `finding` (ForeignKey) - Links to DefectDojo Finding after conversion
+- Unique constraint: `['repository', 'alert_type', 'github_alert_id']`
+
+**GitHubAlertSync Model** (`dojo/models.py`)
+Tracks alert sync status per repository:
+- Sync timestamps: `dependabot_last_sync`, `codeql_last_sync`, `secret_scanning_last_sync`
+- Statistics: `dependabot_alerts_fetched`, `codeql_alerts_fetched`, `secret_scanning_alerts_fetched`
+- Error tracking: `last_sync_error`, `last_sync_error_at`, `last_rate_limit_hit`
+- OneToOne relationship with Repository
+
+**Test Types for GitHub Alerts:**
+Three new Test_Type records created automatically:
+- "GitHub Dependabot" - Dependency vulnerability alerts
+- "GitHub CodeQL" - Code scanning/SAST alerts
+- "GitHub Secret Scanning" - Exposed secrets alerts
+
+**Data Hierarchy Flow:**
+1. Repository record created/updated via `sync_github_repositories` command
+2. GitHubAlert records synced via `sync_github_alerts` command
+3. Findings created with `--create-findings` flag, linked to appropriate Test
+4. Finding updates trigger on re-sync based on alert state changes
+5. Each Repository gets one Engagement with three Tests (one per alert type)
 
 ## Development Guidelines
 
