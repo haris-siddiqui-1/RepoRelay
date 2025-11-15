@@ -9,6 +9,8 @@ from dojo.models import (
     ChoiceAnswer,
     ChoiceQuestion,
     Engagement_Survey,
+    GitHubAlert,
+    GitHubAlertSync,
     Question,
     Repository,
     TextAnswer,
@@ -239,3 +241,198 @@ class RepositoryAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Repository, RepositoryAdmin)
+
+
+# ==============================
+# GitHub Alert Models
+# ==============================
+
+
+class GitHubAlertAdmin(admin.ModelAdmin):
+    """ModelAdmin for GitHubAlert"""
+
+    list_display = (
+        'id',
+        'repository',
+        'alert_type',
+        'state',
+        'severity',
+        'title_truncated',
+        'created_at',
+        'finding_link',
+    )
+
+    list_filter = (
+        'alert_type',
+        'state',
+        'severity',
+        'repository',
+        'created_at',
+    )
+
+    search_fields = (
+        'title',
+        'github_alert_id',
+        'cve',
+        'package_name',
+        'rule_id',
+        'secret_type',
+    )
+
+    readonly_fields = (
+        'synced_at',
+        'created',
+    )
+
+    fieldsets = (
+        ('Alert Information', {
+            'fields': (
+                'repository',
+                'alert_type',
+                'github_alert_id',
+                'state',
+                'severity',
+                'title',
+                'description',
+                'html_url',
+            )
+        }),
+        ('Timestamps', {
+            'fields': (
+                'created_at',
+                'updated_at',
+                'dismissed_at',
+                'fixed_at',
+            )
+        }),
+        ('Dependabot Fields', {
+            'fields': (
+                'cve',
+                'package_name',
+                'package_ecosystem',
+                'vulnerable_version',
+                'patched_version',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('CodeQL Fields', {
+            'fields': (
+                'cwe',
+                'rule_id',
+                'file_path',
+                'start_line',
+                'end_line',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('Secret Scanning Fields', {
+            'fields': (
+                'secret_type',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('DefectDojo Integration', {
+            'fields': (
+                'finding',
+            )
+        }),
+        ('Raw Data', {
+            'fields': (
+                'raw_data',
+            ),
+            'classes': ('collapse',),
+        }),
+        ('System Fields', {
+            'fields': (
+                'synced_at',
+                'created',
+            )
+        }),
+    )
+
+    def title_truncated(self, obj):
+        """Return truncated title for list display."""
+        return obj.title[:75] + '...' if len(obj.title) > 75 else obj.title
+    title_truncated.short_description = 'Title'
+
+    def finding_link(self, obj):
+        """Return link to associated Finding if exists."""
+        if obj.finding:
+            from django.urls import reverse
+            from django.utils.html import format_html
+            url = reverse('admin:dojo_finding_change', args=[obj.finding.id])
+            return format_html('<a href="{}">Finding #{}</a>', url, obj.finding.id)
+        return '-'
+    finding_link.short_description = 'Finding'
+    finding_link.allow_tags = True
+
+
+class GitHubAlertSyncAdmin(admin.ModelAdmin):
+    """ModelAdmin for GitHubAlertSync"""
+
+    list_display = (
+        'repository',
+        'dependabot_last_sync',
+        'codeql_last_sync',
+        'secret_scanning_last_sync',
+        'full_sync_completed',
+        'sync_enabled',
+    )
+
+    list_filter = (
+        'sync_enabled',
+        'full_sync_completed',
+        'dependabot_last_sync',
+    )
+
+    search_fields = (
+        'repository__name',
+    )
+
+    readonly_fields = (
+        'last_sync_error_at',
+        'last_rate_limit_hit',
+        'created',
+        'updated',
+    )
+
+    fieldsets = (
+        ('Repository', {
+            'fields': (
+                'repository',
+                'sync_enabled',
+                'full_sync_completed',
+            )
+        }),
+        ('Last Sync Times', {
+            'fields': (
+                'dependabot_last_sync',
+                'codeql_last_sync',
+                'secret_scanning_last_sync',
+            )
+        }),
+        ('Alert Counts', {
+            'fields': (
+                'dependabot_alerts_fetched',
+                'codeql_alerts_fetched',
+                'secret_scanning_alerts_fetched',
+            )
+        }),
+        ('Error Tracking', {
+            'fields': (
+                'last_sync_error',
+                'last_sync_error_at',
+                'last_rate_limit_hit',
+            )
+        }),
+        ('System Fields', {
+            'fields': (
+                'created',
+                'updated',
+            )
+        }),
+    )
+
+
+admin.site.register(GitHubAlert, GitHubAlertAdmin)
+admin.site.register(GitHubAlertSync, GitHubAlertSyncAdmin)

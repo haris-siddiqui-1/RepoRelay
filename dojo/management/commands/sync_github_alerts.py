@@ -36,6 +36,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 
 from dojo.github_collector.alerts_collector import GitHubAlertsCollector
+from dojo.github_collector.findings_converter import GitHubFindingsConverter
 from dojo.models import Repository
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Show what would be synced without making changes'
         )
+        parser.add_argument(
+            '--create-findings',
+            action='store_true',
+            help='Create DefectDojo Findings from synced GitHub alerts'
+        )
         # Note: --verbosity is provided by Django's BaseCommand, don't redefine it
 
     def handle(self, *args, **options):
@@ -79,6 +85,7 @@ class Command(BaseCommand):
         force = options.get('force', False)
         limit = options.get('limit')
         dry_run = options.get('dry_run', False)
+        create_findings = options.get('create_findings', False)
         verbosity = options.get('verbosity', 1)
 
         # Configure logging based on verbosity
@@ -104,13 +111,16 @@ class Command(BaseCommand):
         except Exception as e:
             raise CommandError(f'Failed to initialize GitHub Alerts Collector: {e}')
 
+        # Initialize findings converter if needed
+        findings_converter = GitHubFindingsConverter() if create_findings else None
+
         # Sync specific repository or all repositories
         if repository_id:
-            self._sync_single_repository(collector, repository_id, force, dry_run)
+            self._sync_single_repository(collector, repository_id, force, dry_run, findings_converter)
         else:
-            self._sync_all_repositories(collector, force, limit, dry_run)
+            self._sync_all_repositories(collector, force, limit, dry_run, findings_converter)
 
-    def _sync_single_repository(self, collector, repository_id, force, dry_run):
+    def _sync_single_repository(self, collector, repository_id, force, dry_run, findings_converter=None):
         """Sync a single repository by ID."""
         try:
             repository = Repository.objects.get(id=repository_id)
@@ -135,12 +145,25 @@ class Command(BaseCommand):
                 f"✓ {repository.name}: {result.total_alerts} alerts "
                 f"(D:{result.dependabot_count}, C:{result.codeql_count}, S:{result.secret_scanning_count})"
             ))
+
+            # Create findings if requested
+            if findings_converter:
+                self.stdout.write("  Creating findings from alerts...")
+                findings_stats = findings_converter.sync_repository_findings(repository)
+                self.stdout.write(self.style.SUCCESS(
+                    f"  ✓ Findings: {findings_stats['created']} created, "
+                    f"{findings_stats['updated']} updated"
+                ))
+                if findings_stats['errors'] > 0:
+                    self.stdout.write(self.style.WARNING(
+                        f"  ⚠ {findings_stats['errors']} errors during finding creation"
+                    ))
         else:
             self.stdout.write(self.style.ERROR(
                 f"✗ {repository.name}: Failed - {', '.join(result.errors)}"
             ))
 
-    def _sync_all_repositories(self, collector, force, limit, dry_run):
+    def _sync_all_repositories(self, collector, force, limit, dry_run, findings_converter=None):
         """Sync all repositories."""
         # Get repositories that need syncing
         repositories = Repository.objects.filter(
@@ -162,7 +185,8 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(f"Found {total_repos} repositories to sync")
-        self.stdout.write(f"Force: {force}, Limit: {limit or 'none'}, Dry run: {dry_run}")
+        create_findings_msg = ", Create findings: Yes" if findings_converter else ""
+        self.stdout.write(f"Force: {force}, Limit: {limit or 'none'}, Dry run: {dry_run}{create_findings_msg}")
 
         if dry_run:
             self.stdout.write(self.style.WARNING("\nDRY RUN - No changes will be made\n"))
@@ -177,6 +201,8 @@ class Command(BaseCommand):
         successful = 0
         failed = 0
         total_alerts = 0
+        total_findings_created = 0
+        total_findings_updated = 0
 
         self.stdout.write("\nSyncing repositories:")
         self.stdout.write("-" * 80)
@@ -195,6 +221,20 @@ class Command(BaseCommand):
                     f"CodeQL: {result.codeql_count}, "
                     f"Secrets: {result.secret_scanning_count})"
                 ))
+
+                # Create findings if requested
+                if findings_converter:
+                    findings_stats = findings_converter.sync_repository_findings(repository)
+                    total_findings_created += findings_stats['created']
+                    total_findings_updated += findings_stats['updated']
+                    self.stdout.write(self.style.SUCCESS(
+                        f"  ✓ Findings: {findings_stats['created']} created, "
+                        f"{findings_stats['updated']} updated"
+                    ))
+                    if findings_stats['errors'] > 0:
+                        self.stdout.write(self.style.WARNING(
+                            f"  ⚠ {findings_stats['errors']} errors"
+                        ))
             else:
                 failed += 1
                 error_msg = ', '.join(result.errors) if result.errors else 'Unknown error'
@@ -215,7 +255,11 @@ class Command(BaseCommand):
         if failed > 0:
             self.stdout.write(self.style.ERROR(f"  Failed: {failed}"))
         self.stdout.write(f"  Total alerts synced: {total_alerts}")
-        self.stdout.write(f"    - Dependabot: {sum(r.dependabot_count for r in collector._get_repositories_for_sync(force=True, limit=None))}")
-        self.stdout.write(f"    - CodeQL: {sum(r.codeql_count for r in collector._get_repositories_for_sync(force=True, limit=None))}")
-        self.stdout.write(f"    - Secret Scanning: {sum(r.secret_scanning_count for r in collector._get_repositories_for_sync(force=True, limit=None))}")
+
+        if findings_converter:
+            self.stdout.write(f"\nFindings Created:")
+            self.stdout.write(self.style.SUCCESS(f"  Created: {total_findings_created}"))
+            self.stdout.write(f"  Updated: {total_findings_updated}")
+            self.stdout.write(f"  Total: {total_findings_created + total_findings_updated}")
+
         self.stdout.write("")
