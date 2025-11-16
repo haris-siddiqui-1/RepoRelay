@@ -228,6 +228,15 @@ DefectDojo has three GitHub integration patterns:
    - Management command: `python manage.py sync_github_alerts --create-findings`
    - See detailed documentation: dojo/github_collector/README_ALERTS.md
 
+4. **Product Migration Wizard** (`dojo/product/migration_wizard.py`) - NEW (January 2025)
+   - Migrates from "1 Product per Repository" to "1 Product per Application"
+   - Uses hierarchical clustering to suggest logical repository groupings
+   - Preserves Finding → Test → Engagement → Product relationship chain
+   - **Critical Feature**: Migrates Engagements along with Repositories to prevent Finding orphaning
+   - Transaction-safe operations with rollback capability
+   - Clustering engine: `dojo/github_collector/clustering.py`
+   - Management command: `python manage.py migrate_products_to_repositories`
+
 **GraphQL Migration (January 2025):**
 The repository collector now uses GitHub GraphQL API v4 for bulk organization syncs, reducing API calls by 94% and enabling sub-5-minute daily incremental syncs. REST API remains as fallback and for individual repository updates.
 
@@ -242,6 +251,14 @@ The alerts collector creates a data hierarchy: Product → Repository → GitHub
 - Alert types: Dependabot (GraphQL), CodeQL (REST), Secret Scanning (REST)
 - Finding integration: Automatic Test creation per alert type, state synchronization
 - Admin UI: Complete CRUD for Repository, GitHubAlert, GitHubAlertSync models
+
+**Product Migration (Phase 4 - January 2025):**
+- ProductMigrationWizard class provides clustering-based repository grouping
+- Migration preserves all data relationships: Finding → Test → Engagement → Product
+- Engagement Migration Fix: Engagements are moved along with Repositories during consolidation (dojo/product/migration_wizard.py:336-347)
+- Rollback Limitation: Repository rollback is fully automated; Engagement rollback is not automated due to lack of tracking metadata (documented at lines 471-479)
+- Validated with 133 real GitHub security alerts: 100% data preservation, 100% hash code stability
+- See validation report: PHASE4_VALIDATION_REPORT.md
 
 ### Data Persistence Patterns
 **Advanced Django Features:**

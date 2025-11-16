@@ -333,6 +333,19 @@ class ProductMigrationWizard:
 
                     # Mark old Product as placeholder (if not already migrated)
                     if old_product and not old_product.is_repository_placeholder:
+                        # CRITICAL FIX: Move all Engagements from old Product to new Product
+                        # This preserves the Finding → Test → Engagement → Product chain
+                        engagements = Engagement.objects.filter(product=old_product)
+                        engagement_count = 0
+                        for engagement in engagements:
+                            engagement.product = new_product
+                            engagement.save()
+                            engagement_count += 1
+                            logger.info(f"Moved Engagement '{engagement.name}' → Product {new_product.name}")
+
+                        if engagement_count > 0:
+                            logger.info(f"Migrated {engagement_count} engagements from {old_product.name} to {new_product.name}")
+
                         old_product.is_repository_placeholder = True
                         old_product.migrated_to_product = new_product
                         old_product.migration_date = timezone.now()
@@ -455,8 +468,18 @@ class ProductMigrationWizard:
                         repo.product = original_product
                         repo.save()
 
-                        # Un-archive original product
-                        original_product.is_repository_placeholder = False
+                        # NOTE: Engagement rollback is not automated
+                        # Engagements remain under the new Product because we lack metadata
+                        # to determine which original Product each Engagement came from.
+                        # If Engagement restoration is required, manual reassignment is needed
+                        # by querying Engagement history or reviewing migration logs.
+                        logger.warning(
+                            f"Rollback: Repository {repo.name} restored to {original_product.name}. "
+                            f"Engagements remain under Product '{new_product.name}' - manual review required if restoration needed."
+                        )
+
+                        # Un-archive original product (keep as placeholder per Phase 1-3 design)
+                        original_product.is_repository_placeholder = True
                         original_product.migrated_to_product = None
                         original_product.migration_date = None
                         original_product.save()
