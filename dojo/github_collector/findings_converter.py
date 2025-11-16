@@ -77,6 +77,26 @@ class GitHubFindingsConverter:
         severity = github_severity.lower() if github_severity else 'info'
         return self.SEVERITY_MAP.get(severity, 'Info')
 
+    def _get_numerical_severity(self, severity: str) -> str:
+        """
+        Get numerical severity from text severity.
+
+        Args:
+            severity: DefectDojo severity (Critical, High, Medium, Low, Info)
+
+        Returns:
+            Numerical severity (S0, S1, S2, S3, S4)
+        """
+        if severity == "Critical":
+            return "S0"
+        if severity == "High":
+            return "S1"
+        if severity == "Medium":
+            return "S2"
+        if severity == "Low":
+            return "S3"
+        return "S4"  # Info or any other value
+
     def _get_or_create_engagement(self, repository: Repository) -> Engagement:
         """
         Get or create an Engagement for GitHub security alerts.
@@ -93,17 +113,25 @@ class GitHubFindingsConverter:
 
         engagement_name = f"GitHub Security Alerts - {repository.name}"
 
-        engagement, created = Engagement.objects.get_or_create(
-            product=product,
-            name=engagement_name,
-            defaults={
-                'target_start': timezone.now().date(),
-                'target_end': timezone.now().date(),
-                'active': True,
-                'status': 'In Progress',
-                'engagement_type': 'CI/CD',
-            }
-        )
+        # Use select_for_update to prevent race conditions during concurrent syncs
+        with transaction.atomic():
+            try:
+                engagement = Engagement.objects.select_for_update().get(
+                    product=product,
+                    name=engagement_name,
+                )
+                created = False
+            except Engagement.DoesNotExist:
+                engagement = Engagement.objects.create(
+                    product=product,
+                    name=engagement_name,
+                    target_start=timezone.now().date(),
+                    target_end=timezone.now().date(),
+                    active=True,
+                    status='In Progress',
+                    engagement_type='CI/CD',
+                )
+                created = True
 
         if created:
             logger.info(f"Created engagement: {engagement_name}")
@@ -147,15 +175,23 @@ class GitHubFindingsConverter:
         # Get or create Test
         test_name = f"{repository.name} - {test_type_name}"
 
-        test, created = Test.objects.get_or_create(
-            engagement=engagement,
-            test_type=test_type,
-            defaults={
-                'target_start': timezone.now(),
-                'target_end': timezone.now(),
-                'percent_complete': 100,
-            }
-        )
+        # Use select_for_update to prevent race conditions during concurrent syncs
+        with transaction.atomic():
+            try:
+                test = Test.objects.select_for_update().get(
+                    engagement=engagement,
+                    test_type=test_type,
+                )
+                created = False
+            except Test.DoesNotExist:
+                test = Test.objects.create(
+                    engagement=engagement,
+                    test_type=test_type,
+                    target_start=timezone.now(),
+                    target_end=timezone.now(),
+                    percent_complete=100,
+                )
+                created = True
 
         if created:
             logger.info(f"Created test: {test_name}")
@@ -217,10 +253,12 @@ class GitHubFindingsConverter:
         if alert.patched_version:
             mitigation = f"Upgrade {alert.package_name} to version {alert.patched_version} or later."
 
+        severity = self._map_severity(alert.severity)
         return {
             'title': title[:511],  # Max length
             'description': description,
-            'severity': self._map_severity(alert.severity),
+            'severity': severity,
+            'numerical_severity': self._get_numerical_severity(severity),
             'cve': alert.cve if alert.cve else None,
             'mitigation': mitigation,
             'component_name': alert.package_name,
@@ -276,10 +314,12 @@ class GitHubFindingsConverter:
             except (ValueError, AttributeError):
                 logger.warning(f"Could not parse CWE from: {alert.cwe}")
 
+        severity = self._map_severity(alert.severity)
         return {
             'title': title[:511],
             'description': description,
-            'severity': self._map_severity(alert.severity),
+            'severity': severity,
+            'numerical_severity': self._get_numerical_severity(severity),
             'cwe': cwe_number,
             'file_path': alert.file_path,
             'line': alert.start_line,
@@ -324,10 +364,12 @@ class GitHubFindingsConverter:
 
         description = "\n".join(description_parts)
 
+        severity = 'Critical'  # Secrets are always critical
         return {
             'title': title[:511],
             'description': description,
-            'severity': 'Critical',  # Secrets are always critical
+            'severity': severity,
+            'numerical_severity': self._get_numerical_severity(severity),
             'file_path': alert.file_path,
             'line': alert.start_line,
             'references': alert.html_url,

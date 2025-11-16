@@ -364,7 +364,6 @@ class GitHubAlertAdmin(admin.ModelAdmin):
             return format_html('<a href="{}">Finding #{}</a>', url, obj.finding.id)
         return '-'
     finding_link.short_description = 'Finding'
-    finding_link.allow_tags = True
 
 
 class GitHubAlertSyncAdmin(admin.ModelAdmin):
