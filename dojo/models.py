@@ -1376,6 +1376,30 @@ class Product(models.Model):
                                          verbose_name=_("Has SAST Config"),
                                          help_text=_("SAST tools configured"))
 
+    # Phase 4: Product Migration Tracking
+    is_repository_placeholder = models.BooleanField(
+        default=False,
+        verbose_name=_("Is Repository Placeholder"),
+        help_text=_("True if this Product was auto-created as a 1:1 placeholder for a single repository (before Phase 4 migration)")
+    )
+
+    migrated_to_product = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='migrated_from_products',
+        verbose_name=_("Migrated To Product"),
+        help_text=_("If this placeholder was migrated, points to the new logical Product it was grouped into")
+    )
+
+    migration_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Migration Date"),
+        help_text=_("When this Product was migrated to a new grouping (Phase 4)")
+    )
+
     class Meta:
         ordering = ("name",)
 
