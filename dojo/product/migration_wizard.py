@@ -220,6 +220,13 @@ class ProductMigrationWizard:
                 f"They will retain their current Product assignments."
             )
 
+        # Check 6: Validate product_type_id is provided
+        for group in groupings:
+            if not group.get('product_type_id'):
+                validation_errors.append(
+                    f"Product '{group['product_name']}' missing required product_type_id"
+                )
+
         return {
             'success': len(validation_errors) == 0,
             'validation_errors': validation_errors,
@@ -237,9 +244,8 @@ class ProductMigrationWizard:
                     'product_name': group['product_name'],
                     'repository_count': len(group.get('repository_ids', [])),
                     'repository_names': [
-                        repositories.get(id=rid).name
-                        for rid in group.get('repository_ids', [])
-                        if rid in found_repo_ids
+                        repo.name
+                        for repo in repositories.filter(id__in=group.get('repository_ids', []))
                     ]
                 }
                 for group in groupings

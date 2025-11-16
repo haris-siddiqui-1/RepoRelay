@@ -179,11 +179,11 @@ class RepositoryClusteringEngine:
 
             # 5. Activity patterns (3 features, normalized)
             # Contributors (normalize to 0-1, assume max 50)
-            contributors = getattr(repo, 'active_contributors_90d', 0)
+            contributors = getattr(repo, 'active_contributors_90d', 0) or 0
             repo_features.append(min(1.0, contributors / 50.0))
 
             # Days since last commit (inverse normalized, assume max 365)
-            days_since = getattr(repo, 'days_since_last_commit', 365)
+            days_since = getattr(repo, 'days_since_last_commit', 365) or 365
             repo_features.append(max(0.0, 1.0 - (days_since / 365.0)))
 
             # Tier (convert to numeric: tier1=4, tier2=3, tier3=2, tier4=1, archived=0)
@@ -513,8 +513,8 @@ class RepositoryClusteringEngine:
         n_repos = len(repos)
 
         if n_repos == 1:
-            # Single repo clusters get lower confidence
-            return 60
+            # Single repo clusters get perfect confidence (deterministic)
+            return 100
 
         # 1. Intra-cluster similarity (0-40 points)
         # Based on feature variance - lower variance = higher similarity
