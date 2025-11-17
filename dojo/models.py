@@ -1283,6 +1283,88 @@ class Product(models.Model):
                                        verbose_name=_("Repository Owner"),
                                        help_text=_("GitHub organization or user that owns the repository"))
 
+    # Enterprise Context Enrichment - Activity Metrics (added for enterprise GitHub management insights)
+    commit_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Total Commits"),
+        help_text=_("Total number of commits in default branch")
+    )
+
+    open_issues_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Open Issues"),
+        help_text=_("Number of currently open issues")
+    )
+
+    open_pr_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Open Pull Requests"),
+        help_text=_("Number of currently open pull requests")
+    )
+
+    # Enterprise Context Enrichment - CI/CD Activity Metrics (behavioral webhook detection)
+    workflow_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("GitHub Actions Workflows"),
+        help_text=_("Number of configured GitHub Actions workflows")
+    )
+
+    workflow_runs_90d = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Workflow Runs (90 days)"),
+        help_text=_("Number of workflow executions in last 90 days")
+    )
+
+    workflow_runs_per_week = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Workflow Runs per Week"),
+        help_text=_("Average workflow execution frequency (cadence)")
+    )
+
+    last_workflow_run_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Workflow Run"),
+        help_text=_("Timestamp of most recent workflow execution")
+    )
+
+    deployments_90d = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Deployments (90 days)"),
+        help_text=_("Number of deployments in last 90 days")
+    )
+
+    deployments_per_week = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Deployments per Week"),
+        help_text=_("Average deployment frequency (CD cadence)")
+    )
+
+    last_deployment_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Deployment"),
+        help_text=_("Timestamp of most recent deployment")
+    )
+
+    is_cicd_platform = models.BooleanField(
+        default=False,
+        verbose_name=_("Is CI/CD Platform"),
+        help_text=_("Repository has high automation activity (CI/CD)")
+    )
+
     # Enterprise Context Enrichment - Binary Signals: Deployment Indicators
     has_dockerfile = models.BooleanField(default=False,
                                         verbose_name=_("Has Dockerfile"),

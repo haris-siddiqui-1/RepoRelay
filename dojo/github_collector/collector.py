@@ -239,6 +239,19 @@ class GitHubRepositoryCollector:
             product.last_commit_date = metadata['last_commit_date']
             product.active_contributors_90d = metadata['active_contributors_90d']
             product.days_since_last_commit = metadata['days_since_last_commit']
+            product.commit_count = metadata['commit_count']
+            product.open_issues_count = metadata['open_issues_count']
+            product.open_pr_count = metadata['open_pr_count']
+
+            # CI/CD Activity (behavioral webhook detection)
+            product.workflow_count = metadata['workflow_count']
+            product.workflow_runs_90d = metadata['workflow_runs_90d']
+            product.workflow_runs_per_week = metadata['workflow_runs_per_week']
+            product.last_workflow_run_date = metadata['last_workflow_run_date']
+            product.deployments_90d = metadata['deployments_90d']
+            product.deployments_per_week = metadata['deployments_per_week']
+            product.last_deployment_date = metadata['last_deployment_date']
+            product.is_cicd_platform = metadata['is_cicd_platform']
 
             # Repository metadata
             product.github_url = repo.html_url
@@ -306,6 +319,9 @@ class GitHubRepositoryCollector:
             product.last_commit_date = metadata['last_commit_date']
             product.active_contributors_90d = metadata['active_contributors_90d']
             product.days_since_last_commit = metadata['days_since_last_commit']
+            product.commit_count = metadata['commit_count']
+            product.open_issues_count = metadata['open_issues_count']
+            product.open_pr_count = metadata['open_pr_count']
 
             # Repository metadata
             product.github_url = repo_data.get('url')
@@ -414,6 +430,34 @@ class GitHubRepositoryCollector:
             logger.warning(f"Could not count contributors for {repo.full_name}: {e}")
             metadata['active_contributors_90d'] = 0
 
+        # Activity metrics - Enterprise GitHub management insights
+        try:
+            # Total commit count from default branch
+            default_branch = repo.get_branch(repo.default_branch)
+            metadata['commit_count'] = default_branch.commit.commit.sha and repo.get_commits().totalCount or 0
+        except Exception as e:
+            logger.warning(f"Could not fetch commit count for {repo.full_name}: {e}")
+            metadata['commit_count'] = 0
+
+        try:
+            # Open issues count (direct from repo object)
+            metadata['open_issues_count'] = repo.open_issues_count
+        except Exception as e:
+            logger.warning(f"Could not fetch open issues count for {repo.full_name}: {e}")
+            metadata['open_issues_count'] = 0
+
+        try:
+            # Open PR count (need to count from API)
+            open_prs = repo.get_pulls(state='open')
+            metadata['open_pr_count'] = open_prs.totalCount
+        except Exception as e:
+            logger.warning(f"Could not fetch open PR count for {repo.full_name}: {e}")
+            metadata['open_pr_count'] = 0
+
+        # CI/CD Activity metrics - Behavioral webhook detection
+        cicd_metrics = self._collect_cicd_metrics(repo)
+        metadata.update(cicd_metrics)
+
         # CODEOWNERS
         try:
             codeowners_content, ownership_confidence = self._fetch_codeowners(repo)
@@ -458,6 +502,133 @@ class GitHubRepositoryCollector:
         except Exception as e:
             logger.debug(f"CODEOWNERS not found for {repo.full_name}: {e}")
             return '', 0
+
+    def _collect_cicd_metrics(self, repo) -> dict:
+        """
+        Collect CI/CD activity metrics from GitHub Actions workflows and deployments.
+
+        Behavioral webhook detection: Infers webhook activity patterns from observable
+        GitHub Actions and deployment activity without needing admin webhook access.
+
+        Args:
+            repo: PyGithub Repository object
+
+        Returns:
+            Dictionary with CI/CD metrics
+        """
+        metrics = {
+            'workflow_count': 0,
+            'workflow_runs_90d': 0,
+            'workflow_runs_per_week': 0,
+            'last_workflow_run_date': None,
+            'deployments_90d': 0,
+            'deployments_per_week': 0,
+            'last_deployment_date': None,
+            'is_cicd_platform': False
+        }
+
+        # Calculate 90 days ago for filtering
+        ninety_days_ago = timezone.now() - timedelta(days=90)
+
+        # GitHub Actions workflows
+        try:
+            workflows = repo.get_workflows()
+            metrics['workflow_count'] = workflows.totalCount
+
+            # Get recent workflow runs (last 90 days) - server-side filtering for performance
+            # Format: YYYY-MM-DD, use >= for "on or after" filtering
+            created_filter = f">={ninety_days_ago.strftime('%Y-%m-%d')}"
+            workflow_runs = repo.get_workflow_runs(created=created_filter)
+
+            # Server-side filtered count
+            metrics['workflow_runs_90d'] = workflow_runs.totalCount
+
+            # Get latest run date from first result (runs ordered by created_at DESC)
+            if workflow_runs.totalCount > 0:
+                metrics['last_workflow_run_date'] = workflow_runs[0].created_at
+            else:
+                metrics['last_workflow_run_date'] = None
+
+        except Exception as e:
+            logger.warning(f"Could not fetch workflow data for {repo.full_name}: {e}")
+
+        # Deployments - server-side filtering for performance
+        try:
+            # Note: GitHub Deployments API may not support 'created' parameter
+            # Attempt server-side filtering, fall back to client-side if unsupported
+            try:
+                created_filter = f">={ninety_days_ago.strftime('%Y-%m-%d')}"
+                deployments = repo.get_deployments(created=created_filter)
+
+                # Server-side filtered count
+                metrics['deployments_90d'] = deployments.totalCount
+
+                # Get latest deployment date from first result
+                if deployments.totalCount > 0:
+                    metrics['last_deployment_date'] = deployments[0].created_at
+                else:
+                    metrics['last_deployment_date'] = None
+
+            except TypeError:
+                # Fallback: get_deployments() doesn't accept created parameter
+                # Use client-side filtering with pagination limit for safety
+                deployments = repo.get_deployments()
+                deploys_90d = 0
+                latest_deploy_date = None
+
+                # Limit iteration to first 1000 deployments for performance
+                for idx, deploy in enumerate(deployments):
+                    if idx >= 1000:  # Safety limit
+                        logger.warning(f"Deployment count truncated at 1000 for {repo.full_name}")
+                        break
+                    if deploy.created_at < ninety_days_ago:
+                        break  # Deployments are ordered by date DESC
+                    deploys_90d += 1
+                    if latest_deploy_date is None:
+                        latest_deploy_date = deploy.created_at
+
+                metrics['deployments_90d'] = deploys_90d
+                metrics['last_deployment_date'] = latest_deploy_date
+
+        except Exception as e:
+            logger.warning(f"Could not fetch deployment data for {repo.full_name}: {e}")
+
+        # Calculate cadence (per week) from 90-day totals
+        # Formula: (count_90d / 90 days) * 7 days/week
+        metrics['workflow_runs_per_week'] = round((metrics['workflow_runs_90d'] / 90.0) * 7, 2)
+        metrics['deployments_per_week'] = round((metrics['deployments_90d'] / 90.0) * 7, 2)
+
+        # CI/CD Platform Detection (score-based algorithm)
+        # Score range: 0-100, threshold: 40+ = CI/CD platform
+        score = 0
+
+        # Has workflows configured (20 points)
+        if metrics['workflow_count'] > 0:
+            score += 20
+
+        # Active CI (30 points for moderate, +10 for very active)
+        if metrics['workflow_runs_per_week'] > 10:
+            score += 30
+        if metrics['workflow_runs_per_week'] > 50:
+            score += 10
+
+        # CD enabled (20 points for deployments, +20 for daily deploys)
+        if metrics['deployments_per_week'] > 1:
+            score += 20
+        if metrics['deployments_per_week'] > 7:
+            score += 20
+
+        # CI/CD platform classification
+        metrics['is_cicd_platform'] = score >= 40
+
+        logger.debug(f"CI/CD metrics for {repo.full_name}: "
+                    f"workflows={metrics['workflow_count']}, "
+                    f"runs/week={metrics['workflow_runs_per_week']}, "
+                    f"deploys/week={metrics['deployments_per_week']}, "
+                    f"score={score}, "
+                    f"is_cicd={metrics['is_cicd_platform']}")
+
+        return metrics
 
     def _should_skip_repo(self, repo) -> bool:
         """
@@ -595,6 +766,15 @@ class GitHubRepositoryCollector:
         # Active contributors (already counted by GraphQL client)
         contributor_count = commits.get('contributorCount', 0)
         metadata['active_contributors_90d'] = contributor_count
+
+        # Activity metrics - Enterprise GitHub management insights
+        metadata['commit_count'] = commits.get('totalCount', 0)
+
+        issues = repo_data.get('issues', {})
+        metadata['open_issues_count'] = issues.get('totalCount', 0)
+
+        pull_requests = repo_data.get('pullRequests', {})
+        metadata['open_pr_count'] = pull_requests.get('openCount', 0)
 
         # CODEOWNERS
         codeowners = repo_data.get('codeowners', {})
