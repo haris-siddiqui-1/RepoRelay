@@ -9,6 +9,8 @@ description: Tasks related to Phase 4 implementation - repository clustering, pr
 ## Active Tasks
 
 ### High Priority
+- `h-github-activity-collection.md` - Add enterprise-relevant activity metrics to Repository model (commit_count, open_issues_count, open_pr_count) - prerequisite for insights dashboard
+- `h-github-insights-dashboard.md` - Configurable widget-based dashboard displaying 20+ GitHub repository management insights (activity, health, security, ownership, technology) with user-selectable widget count
 
 ### Medium Priority
 
