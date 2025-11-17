@@ -71,6 +71,7 @@ from dojo.models import (
     Finding_Group,
     Finding_Template,
     General_Survey,
+    GitHubInsightConfiguration,
     Global_Role,
     JIRA_Instance,
     JIRA_Issue,
@@ -3360,3 +3361,13 @@ class CrossRepositoryDuplicatesResponseSerializer(serializers.Serializer):
     total_duplicate_groups = serializers.IntegerField()
     total_findings = serializers.IntegerField()
     duplicates = CrossRepositoryDuplicateSerializer(many=True)
+
+
+class GitHubInsightConfigurationSerializer(serializers.ModelSerializer):
+    """Serializer for GitHubInsightConfiguration model."""
+    user = UserStubSerializer(read_only=True)
+
+    class Meta:
+        model = GitHubInsightConfiguration
+        fields = "__all__"
+        read_only_fields = ("user", "created", "updated")

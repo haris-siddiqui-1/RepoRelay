@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block add_styles %}
+    {{ block.super }}
+    <style>
+        .insight-widget {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+        .widget-header {
+            padding: 10px 15px;
+            background: #f5f5f5;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .widget-body {
+            padding: 15px;
+        }
+        .widget-chart {
+            height: 300px;
+            position: relative;
+        }
+        .widget-table {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .widget-table table {
+            margin-bottom: 0;
+        }
+        .pinned-widget {
+            border: 2px solid #007bff;
+        }
+        .widget-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .widget-actions button {
+            padding: 2px 8px;
+            font-size: 12px;
+        }
+        .placeholder-message {
+            padding: 40px;
+            text-align: center;
+            color: #6c757d;
+        }
+        .config-panel {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .filter-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .loading-spinner {
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <h2>
+            <i class="fa-brands fa-github"></i> {% trans "GitHub Repository Insights Dashboard" %}
+            <button class="btn btn-sm btn-primary pull-right" id="configure-dashboard">
+                <i class="fa fa-cog"></i> {% trans "Configure Dashboard" %}
+            </button>
+        </h2>
+    </div>
+</div>
+
+<!-- Configuration Panel -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="config-panel">
+            <div class="filter-controls">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="product-type-filter" style="margin-right: 10px;">{% trans "Product Type:" %}</label>
+                    <select id="product-type-filter" class="form-control" style="width: 250px; display: inline-block;">
+                        <option value="">{% trans "All Product Types" %}</option>
+                        {% for pt in product_types %}
+                            <option value="{{ pt.id }}">{{ pt.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="days-filter" style="margin-right: 10px;">{% trans "Time Range:" %}</label>
+                    <select id="days-filter" class="form-control" style="width: 150px; display: inline-block;">
+                        <option value="7">{% trans "Last 7 days" %}</option>
+                        <option value="14">{% trans "Last 14 days" %}</option>
+                        <option value="30" selected>{% trans "Last 30 days" %}</option>
+                        <option value="90">{% trans "Last 90 days" %}</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="widget-count" style="margin-right: 10px;">{% trans "Widgets to Display:" %}</label>
+                    <select id="widget-count" class="form-control" style="width: 100px; display: inline-block;">
+                        <option value="5">5</option>
+                        <option value="10" selected>10</option>
+                        <option value="15">15</option>
+                        <option value="20">20</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary" id="refresh-dashboard">
+                    <i class="fa fa-refresh"></i> {% trans "Refresh All" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Widgets Container -->
+<div class="row">
+    <div class="col-lg-12">
+        <div id="dashboard-widgets">
+            <div class="loading-spinner">
+                <i class="fa fa-spinner fa-spin fa-3x"></i>
+                <p>{% trans "Loading dashboard..." %}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Widget Configuration Modal -->
+<div class="modal fade" id="configure-modal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+                <h4 class="modal-title">{% trans "Configure Dashboard Widgets" %}</h4>
+            </div>
+            <div class="modal-body">
+                <p>{% trans "Select and organize insights to display on your dashboard. Pinned widgets always appear first." %}</p>
+
+                <div id="available-insights">
+                    <div class="loading-spinner">
+                        <i class="fa fa-spinner fa-spin"></i>
+                        <p>{% trans "Loading available insights..." %}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+                <button type="button" class="btn btn-primary" id="save-configuration">{% trans "Save Configuration" %}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+    {{ block.super }}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="{% static 'dojo/js/github_insights_dashboard.js' %}"></script>
+    <script>
+        // Initialize dashboard on page load
+        $(document).ready(function() {
+            GitHubInsightsDashboard.init({
+                apiBaseUrl: '/api/v2/github_insights/',
+                csrfToken: '{{ csrf_token }}'
+            });
+        });
+    </script>
+{% endblock %}

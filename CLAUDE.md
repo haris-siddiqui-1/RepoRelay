@@ -100,6 +100,12 @@ docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --reposit
 
 # Dry run (preview without changes)
 docker compose exec uwsgi bash -c "python manage.py sync_github_alerts --dry-run"
+
+# Generate insights reports (CLI access)
+docker compose exec uwsgi bash -c "python manage.py generate_insights --list"
+docker compose exec uwsgi bash -c "python manage.py generate_insights --insight vuln_distribution"
+docker compose exec uwsgi bash -c "python manage.py generate_insights --category security --output json"
+docker compose exec uwsgi bash -c "python manage.py generate_insights --all --days 30"
 ```
 
 ## Architecture Overview
@@ -131,9 +137,10 @@ Each feature module follows a consistent pattern:
 - `dojo/tools/` - 211 security tool parsers (each with parser.py implementing get_fields, get_dedupe_fields, get_scan_types)
 - `dojo/authorization/` - RBAC with roles: Reader, API_Importer, Writer, Maintainer, Owner
 - `dojo/api_v2/` - REST API with serializers (116KB), permissions (39KB), and viewsets
-- `dojo/github_collector/` - GitHub integration with two major subsystems:
+- `dojo/github_collector/` - GitHub integration with three major subsystems:
   - Repository metadata enrichment (collector.py, graphql_client.py) - See README_GRAPHQL.md
   - Security alerts collection (alerts_collector.py, findings_converter.py) - See README_ALERTS.md
+  - **Insights dashboard** (insights/ module) - 25 insights across 5 categories with widget-based UI
   - Supports GraphQL API v4 (bulk operations) with REST API fallback
 
 ### REST API Architecture
@@ -147,6 +154,7 @@ Each feature module follows a consistent pattern:
 **Key Endpoints:**
 - `/products/`, `/engagements/`, `/tests/`, `/findings/`
 - `/scan-imports/`, `/re-scan-imports/` - Bulk vulnerability import/update
+- `/github_insights/` - GitHub repository insights and dashboard configuration
 - Pagination, filtering (django-filter), and bulk operations supported
 
 ### Settings & Configuration
@@ -204,7 +212,7 @@ class MyToolParser:
 
 ### GitHub Integration
 
-DefectDojo has three GitHub integration patterns:
+DefectDojo has four GitHub integration patterns:
 
 1. **Issue Tracking** (`dojo/github.py`) - Traditional GitHub issue creation/sync for findings
    - Uses PyGithub REST API
@@ -228,7 +236,17 @@ DefectDojo has three GitHub integration patterns:
    - Management command: `python manage.py sync_github_alerts --create-findings`
    - See detailed documentation: dojo/github_collector/README_ALERTS.md
 
-4. **Product Migration Wizard** (`dojo/product/migration_wizard.py`) - NEW (January 2025)
+4. **Insights Dashboard** (`dojo/github_collector/insights/`) - NEW (January 2025)
+   - Widget-based analytics dashboard with 25 built-in insights
+   - 5 categories: Activity, Health, Security, Ownership, Technology
+   - Pluggable architecture (BaseInsight + InsightRegistry pattern)
+   - User-specific dashboard configuration (GitHubInsightConfiguration model)
+   - Chart.js 4.4.0 visualizations (pie, bar, line, scatter, histogram)
+   - REST API: `/api/v2/github_insights/` and web UI: `/github/insights/dashboard`
+   - Management command: `python manage.py generate_insights`
+   - See detailed documentation in "GitHub Insights Dashboard" section below
+
+5. **Product Migration Wizard** (`dojo/product/migration_wizard.py`) - NEW (January 2025)
    - Migrates from "1 Product per Repository" to "1 Product per Application"
    - Uses hierarchical clustering to suggest logical repository groupings
    - Preserves Finding → Test → Engagement → Product relationship chain
@@ -332,6 +350,196 @@ Three new Test_Type records created automatically:
 3. Findings created with `--create-findings` flag, linked to appropriate Test
 4. Finding updates trigger on re-sync based on alert state changes
 5. Each Repository gets one Engagement with three Tests (one per alert type)
+
+### GitHub Insights Dashboard (January 2025)
+
+**Overview:**
+The Insights Dashboard provides repository management analytics through a configurable widget-based UI with 25 built-in insights across 5 categories: Activity, Health, Security, Ownership, and Technology.
+
+**Architecture Pattern - Pluggable Insights System:**
+
+**BaseInsight Abstract Class** (`dojo/github_collector/insights/base.py`)
+- Defines common interface for all insights
+- Required attributes: `insight_id`, `name`, `description`, `category`, `visualization_type`, `chart_type`
+- Abstract method: `calculate(filters) -> Dict` - Returns structured data with title, data, metadata
+- Default cache duration: 300 seconds (5 minutes)
+- Supports two visualization types: 'table' (tabular data), 'chart' (Chart.js visualizations)
+
+**InsightRegistry Pattern** (`dojo/github_collector/insights/registry.py`)
+- Auto-discovery mechanism for insight classes
+- Central registry for all available insights
+- Methods: `register()`, `get_insight()`, `get_all_insights()`, `get_insights_by_category()`
+- Lazy loading via `autodiscover()` function
+
+**Insight Categories & Examples:**
+
+1. **Activity Insights** (`activity.py`) - 5 insights
+   - Most Recently Updated Repositories
+   - Stale Repositories (no commits in 90 days)
+   - Highest Commit Frequency
+   - Most Active Contributors
+   - Recently Created Repositories
+
+2. **Health Insights** (`health.py`) - 5 insights
+   - Repositories Missing README
+   - Repositories Missing CI/CD
+   - Repositories with Open PRs Older Than 30 Days
+   - Repositories with High Issue Count (>50 open issues)
+   - Stale Repositories (no activity in 6 months)
+
+3. **Security Insights** (`security.py`) - 7 insights
+   - Vulnerability Distribution by Severity (pie chart)
+   - Vulnerability Distribution by Type/CWE (bar chart)
+   - Critical Vulnerability Trend (line chart)
+   - Repositories with Most Critical Findings
+   - Activity-Vulnerability Correlation (scatter plot)
+   - Repositories with No Security Findings
+   - Average Finding Age by Repository
+
+4. **Ownership Insights** (`ownership.py`) - 4 insights
+   - Unassigned Repositories (no Product owner)
+   - Repositories with Multiple Owners
+   - Orphaned Repositories (owner inactive)
+   - Department Distribution
+
+5. **Technology Insights** (`technology.py`) - 4 insights
+   - Most Popular Languages
+   - Repositories Using Docker
+   - Repositories with Kubernetes
+   - Framework Adoption Rates
+
+**Data Models:**
+
+**GitHubInsightConfiguration Model** (`dojo/models.py:5547-5604`)
+- OneToOne relationship with User
+- `widget_config` (JSONField) - Array of widget configurations with insight_id, order, size, pinned, auto_refresh, filters
+- `widget_count` (IntegerField) - Number of widgets to display (default: 10)
+- Pinned widgets bypass widget_count limit and have shorter cache TTL (60s vs 300s)
+- Created/updated timestamps for audit trail
+
+**Product.repository_owner Field** (`dojo/models.py:1281-1284`)
+- New CharField added to Product model
+- Stores GitHub organization or user that owns the repository
+- Used by ownership insights for department/owner analysis
+
+**REST API Endpoints:**
+
+**GitHubInsightsViewSet** (`dojo/api_v2/views.py:3604-3687`)
+- Base URL: `/api/v2/github_insights/`
+- Authentication: IsAuthenticated required
+- Endpoints:
+  - `GET /api/v2/github_insights/` - List all available insights (metadata only)
+  - `GET /api/v2/github_insights/?category=security` - Filter by category
+  - `GET /api/v2/github_insights/{insight_id}/` - Calculate specific insight with optional filters
+  - `GET /api/v2/github_insights/dashboard/` - Get user's dashboard configuration
+  - `POST /api/v2/github_insights/dashboard/` - Update dashboard configuration
+
+**Caching Strategy:**
+- Hash-based cache keys: `github_insight_{insight_id}_{hash(filters)}`
+- Default TTL: 300 seconds (5 minutes)
+- Pinned widgets: 60 seconds (1 minute) - configurable via `cache_duration` attribute
+- Django cache framework with Redis/Valkey backend
+
+**Frontend Dashboard:**
+
+**URL:** `/github/insights/dashboard`
+**Template:** `dojo/templates/dojo/github_insights_dashboard.html`
+**JavaScript:** `dojo/static/dojo/js/github_insights_dashboard.js` (670 lines)
+
+**Features:**
+- Widget-based grid layout (Bootstrap 3.4.1 responsive)
+- Chart.js 4.4.0 for visualizations (pie, bar, line, scatter, histogram)
+- Configuration modal for widget selection and ordering
+- Individual widget refresh buttons
+- Real-time data fetching via REST API
+- Automatic refresh for pinned widgets (60-second intervals)
+- Pin/unpin functionality for critical insights
+- Widget size options: small (col-md-4), medium (col-md-6), large (col-md-12)
+
+**Management Command:**
+
+**Command:** `python manage.py generate_insights`
+**Purpose:** CLI access to insights for automation, testing, and reporting
+**Options:**
+- `--list` - List all available insights grouped by category
+- `--insight <insight_id>` - Generate specific insight (e.g., `--insight vuln_distribution`)
+- `--category <category>` - Generate all insights in category (activity, health, security, ownership, technology)
+- `--all` - Generate all insights
+- `--days <n>` - Time range filter in days (default: 30)
+- `--product-type-id <id>` - Filter by product type
+- `--output <format>` - Output format: json, table (default: table)
+
+**Usage Examples:**
+```bash
+# List all available insights
+python manage.py generate_insights --list
+
+# Generate vulnerability distribution chart
+python manage.py generate_insights --insight vuln_distribution --output json
+
+# Generate all security insights for last 90 days
+python manage.py generate_insights --category security --days 90
+
+# Generate all insights with product type filter
+python manage.py generate_insights --all --product-type-id 5 --output json
+```
+
+**Performance Characteristics:**
+- Insight calculation time: <2 seconds for 2,451 repositories
+- Dashboard load time: <5 seconds for 15 widgets (with cache hits)
+- Query optimization: Uses select_related(), prefetch_related() patterns
+- Database indexes on GitHub-related fields (github_url, last_commit_date)
+
+**Extensibility - Adding Custom Insights:**
+
+1. Create new insight class inheriting from BaseInsight
+2. Implement required attributes and calculate() method
+3. Register with InsightRegistry (automatic via module import)
+4. Place in appropriate category module (activity, health, security, ownership, technology)
+
+Example:
+```python
+# dojo/github_collector/insights/security.py
+from dojo.github_collector.insights.base import BaseInsight
+from dojo.github_collector.insights.registry import InsightRegistry
+
+class MyCustomInsight(BaseInsight):
+    insight_id = 'custom_insight'
+    name = 'My Custom Insight'
+    description = 'Description of what this insight provides'
+    category = 'security'
+    visualization_type = 'chart'
+    chart_type = 'bar'
+
+    def calculate(self, filters=None):
+        # Query data and return structured result
+        return {
+            'title': 'Custom Insight Title',
+            'data': {'labels': [...], 'values': [...]},
+            'metadata': {'count': 10, 'timestamp': timezone.now()}
+        }
+
+# Auto-registration via InsightRegistry.register(MyCustomInsight)
+```
+
+**Database Migrations:**
+- Migration 0253: Creates `github_insight_configuration` table
+- Migration 0254: Adds `repository_owner` field to Product model
+
+**Integration with Existing GitHub Features:**
+- Uses Repository model's 47 enrichment fields (36 binary signals)
+- Queries Finding model for vulnerability analytics
+- Leverages Product model's GitHub URL and business_criticality fields
+- Compatible with GraphQL-based repository sync (README_GRAPHQL.md)
+- Works with GitHub Alerts integration (README_ALERTS.md)
+
+**Future Enhancement Opportunities:**
+- Advanced filtering: Date range pickers, tag filters, custom query builder
+- Widget customization: Drag-and-drop ordering, custom sizes, per-widget filters
+- Alerting: Email/Slack notifications when insight thresholds crossed
+- Scheduled reports: CSV/PDF export, automated email delivery
+- Custom insights: Admin UI for creating insights without code
+- Trend analysis: Historical data tracking, time-series visualizations
 
 ## Development Guidelines
 

@@ -1278,6 +1278,10 @@ class Product(models.Model):
                                               validators=[MinValueValidator(0), MaxValueValidator(100)],
                                               verbose_name=_("Ownership Confidence"),
                                               help_text=_("Confidence score (0-100) for ownership data quality"))
+    repository_owner = models.CharField(max_length=255,
+                                       blank=True,
+                                       verbose_name=_("Repository Owner"),
+                                       help_text=_("GitHub organization or user that owns the repository"))
 
     # Enterprise Context Enrichment - Binary Signals: Deployment Indicators
     has_dockerfile = models.BooleanField(default=False,
@@ -5538,6 +5542,66 @@ class ChoiceAnswer(Answer):
         if len(self.answer.all()):
             return str(self.answer.all()[0])
         return "No Response"
+
+
+class GitHubInsightConfiguration(models.Model):
+    """
+    User-specific dashboard configuration for GitHub repository insights.
+
+    Stores widget selection, ordering, and pin preferences for the insights dashboard.
+    """
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='github_insight_config',
+        verbose_name=_("User"),
+        help_text=_("User who owns this dashboard configuration")
+    )
+
+    # JSON field storing widget configuration
+    # Format: [
+    #   {
+    #     'insight_id': 'most_updated_repos',
+    #     'order': 0,
+    #     'size': 'medium',
+    #     'pinned': False,
+    #     'auto_refresh': False,
+    #     'filters': {'days': 14}
+    #   },
+    #   {
+    #     'insight_id': 'vuln_distribution',
+    #     'order': 1,
+    #     'size': 'large',
+    #     'pinned': True,
+    #     'auto_refresh': True,
+    #     'filters': {}
+    #   },
+    # ]
+    widget_config = models.JSONField(
+        default=list,
+        verbose_name=_("Widget Configuration"),
+        help_text=_("JSON array of widget configurations with insight_id, order, size, pinned, auto_refresh, and filters")
+    )
+
+    # Number of widgets to display (5, 10, 15, etc.)
+    # Note: Pinned widgets always display regardless of widget_count
+    widget_count = models.IntegerField(
+        default=10,
+        verbose_name=_("Widget Count"),
+        help_text=_("Number of widgets to display on dashboard (pinned widgets bypass this limit)")
+    )
+
+    # Metadata
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'github_insight_configuration'
+        verbose_name = _("GitHub Insight Configuration")
+        verbose_name_plural = _("GitHub Insight Configurations")
+
+    def __str__(self):
+        return f"GitHub Insights Config for {self.user.username}"
 
 
 # Audit logging registration is now handled in auditlog.py and configured in apps.py

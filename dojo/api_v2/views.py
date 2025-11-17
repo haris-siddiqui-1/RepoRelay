@@ -110,6 +110,7 @@ from dojo.models import (
     Finding,
     Finding_Template,
     General_Survey,
+    GitHubInsightConfiguration,
     Global_Role,
     JIRA_Instance,
     JIRA_Issue,
@@ -3598,3 +3599,136 @@ class CrossRepositoryDuplicatesView(GenericAPIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+class GitHubInsightsViewSet(viewsets.ViewSet):
+    """
+    ViewSet for GitHub repository insights.
+
+    Provides access to insight metadata, insight calculations, and user dashboard configuration.
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def list(self, request):
+        """List all available insights with metadata."""
+        from dojo.github_collector.insights.registry import InsightRegistry, autodiscover
+
+        # Auto-discover insights on first request
+        autodiscover()
+
+        # Get all insights metadata
+        insights = InsightRegistry.get_all_insights()
+
+        # Optionally filter by category
+        category = request.query_params.get('category')
+        if category:
+            insights = InsightRegistry.get_insights_by_category(category)
+
+        return Response({
+            'count': len(insights),
+            'insights': insights
+        })
+
+    def retrieve(self, request, pk=None):
+        """
+        Get insight data by insight_id.
+
+        Query params:
+        - days: Filter for time-based insights (default: 30)
+        - product_type_id: Filter by product type
+        """
+        from django.core.cache import cache
+        from dojo.github_collector.insights.registry import InsightRegistry, autodiscover
+
+        # Auto-discover insights
+        autodiscover()
+
+        insight_id = pk
+
+        try:
+            insight = InsightRegistry.get_insight(insight_id)
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Build filters from query params
+        filters = {}
+        if 'days' in request.query_params:
+            filters['days'] = int(request.query_params['days'])
+        if 'product_type_id' in request.query_params:
+            filters['product_type_id'] = int(request.query_params['product_type_id'])
+
+        # Check cache
+        cache_key = f"insight_{insight_id}_{hash(str(sorted(filters.items())))}"
+        cached_data = cache.get(cache_key)
+
+        if cached_data:
+            return Response(cached_data)
+
+        # Calculate insight data
+        result = insight.calculate(filters)
+
+        # Cache result
+        cache.set(cache_key, result, insight.cache_duration)
+
+        return Response(result)
+
+    @action(detail=False, methods=['get', 'post'])
+    def dashboard(self, request):
+        """
+        GET: Retrieve user's dashboard configuration
+        POST: Update user's dashboard configuration
+
+        POST body:
+        {
+            "widget_config": [
+                {
+                    "insight_id": "most_updated_repos",
+                    "order": 0,
+                    "size": "medium",
+                    "pinned": false,
+                    "auto_refresh": false,
+                    "filters": {"days": 14}
+                },
+                ...
+            ],
+            "widget_count": 10
+        }
+        """
+        user = request.user
+
+        if request.method == 'GET':
+            # Get or create configuration
+            config, created = GitHubInsightConfiguration.objects.get_or_create(
+                user=user,
+                defaults={
+                    'widget_config': [],
+                    'widget_count': 10
+                }
+            )
+
+            serializer = serializers.GitHubInsightConfigurationSerializer(config)
+            return Response(serializer.data)
+
+        elif request.method == 'POST':
+            # Update configuration
+            config, created = GitHubInsightConfiguration.objects.get_or_create(
+                user=user
+            )
+
+            serializer = serializers.GitHubInsightConfigurationSerializer(
+                config,
+                data=request.data,
+                partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            else:
+                return Response(
+                    serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )

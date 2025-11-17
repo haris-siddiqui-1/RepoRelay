@@ -29,6 +29,7 @@ from dojo.api_v2.views import (
     EngagementViewSet,
     FindingTemplatesViewSet,
     FindingViewSet,
+    GitHubInsightsViewSet,
     GlobalRoleViewSet,
     ImportLanguagesView,
     ImportScanView,
@@ -85,6 +86,7 @@ from dojo.endpoint.urls import urlpatterns as endpoint_urls
 from dojo.engagement.urls import urlpatterns as eng_urls
 from dojo.finding.urls import urlpatterns as finding_urls
 from dojo.finding_group.urls import urlpatterns as finding_group_urls
+from dojo.github_collector.urls import urlpatterns as github_collector_urls
 from dojo.github_issue_link.urls import urlpatterns as github_urls
 from dojo.group.urls import urlpatterns as group_urls
 from dojo.home.urls import urlpatterns as home_urls
@@ -135,6 +137,7 @@ v2_api.register(r"engagements", EngagementViewSet, basename="engagement")
 v2_api.register(r"engagement_presets", EngagementPresetsViewset, basename="engagement_presets")
 v2_api.register(r"finding_templates", FindingTemplatesViewSet, basename="finding_template")
 v2_api.register(r"findings", FindingViewSet, basename="finding")
+v2_api.register(r"github_insights", GitHubInsightsViewSet, basename="github_insights")
 v2_api.register(r"global_roles", GlobalRoleViewSet, basename="global_role")
 v2_api.register(r"import-languages", ImportLanguagesView, basename="importlanguages")
 v2_api.register(r"import-scan", ImportScanView, basename="importscan")
@@ -204,6 +207,7 @@ ur += user_urls
 ur += group_urls
 ur += jira_urls
 ur += github_urls
+ur += github_collector_urls
 ur += tool_type_urls
 ur += tool_config_urls
 ur += tool_product_urls
