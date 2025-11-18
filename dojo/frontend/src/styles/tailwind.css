@@ -1,0 +1,279 @@
+/* DefectDojo Modern Frontend - Main Styles */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base layer - global styles */
+@layer base {
+  /* Modern font smoothing */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Default body styles */
+  body {
+    @apply bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  }
+
+  /* Heading styles */
+  h1 {
+    @apply text-3xl font-bold text-gray-900 dark:text-white;
+  }
+
+  h2 {
+    @apply text-2xl font-semibold text-gray-800 dark:text-gray-100;
+  }
+
+  h3 {
+    @apply text-xl font-semibold text-gray-700 dark:text-gray-200;
+  }
+
+  h4 {
+    @apply text-lg font-medium text-gray-700 dark:text-gray-300;
+  }
+
+  /* Link styles */
+  a {
+    @apply text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors duration-150;
+  }
+
+  /* Focus ring for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-900;
+  }
+}
+
+/* Components layer - reusable components */
+@layer components {
+  /* Card component */
+  .dd-card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700;
+  }
+
+  .dd-card-header {
+    @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700;
+  }
+
+  .dd-card-body {
+    @apply p-6;
+  }
+
+  .dd-card-footer {
+    @apply px-6 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700;
+  }
+
+  /* Button component */
+  .dd-btn {
+    @apply inline-flex items-center px-4 py-2.5 font-medium rounded-md shadow-sm transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .dd-btn-primary {
+    @apply dd-btn bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500;
+  }
+
+  .dd-btn-secondary {
+    @apply dd-btn bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 focus:ring-blue-500;
+  }
+
+  .dd-btn-danger {
+    @apply dd-btn bg-red-600 hover:bg-red-700 text-white focus:ring-red-500;
+  }
+
+  /* Form input */
+  .dd-input {
+    @apply block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-150;
+  }
+
+  /* Badge / Severity indicator */
+  .dd-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .dd-badge-critical {
+    @apply dd-badge bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400;
+  }
+
+  .dd-badge-high {
+    @apply dd-badge bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400;
+  }
+
+  .dd-badge-medium {
+    @apply dd-badge bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400;
+  }
+
+  .dd-badge-low {
+    @apply dd-badge bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400;
+  }
+
+  .dd-badge-info {
+    @apply dd-badge bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400;
+  }
+
+  /* Refined Card Component */
+  .refined-card {
+    @apply bg-white dark:bg-gray-800;
+    background: linear-gradient(135deg, #FFFFFF 0%, #FAFAF9 100%);
+    border: 1px solid #E8E8E6;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+    transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .refined-card:hover {
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.03);
+    transform: translateY(-2px);
+  }
+
+  .dark .refined-card {
+    background: linear-gradient(135deg, #252525 0%, #2A2A2A 100%);
+    border-color: #333333;
+  }
+
+  /* Table */
+  .dd-table {
+    @apply min-w-full divide-y divide-gray-200 dark:divide-gray-700;
+  }
+
+  .dd-table thead {
+    @apply bg-gray-50 dark:bg-gray-800;
+  }
+
+  .dd-table th {
+    @apply px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider;
+  }
+
+  .dd-table td {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100;
+  }
+
+  .dd-table tbody {
+    @apply bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700;
+  }
+
+  /* Alert */
+  .dd-alert {
+    @apply border-l-4 p-4;
+  }
+
+  .dd-alert-info {
+    @apply dd-alert bg-blue-50 dark:bg-blue-900/30 border-blue-400;
+  }
+
+  .dd-alert-success {
+    @apply dd-alert bg-green-50 dark:bg-green-900/30 border-green-400;
+  }
+
+  .dd-alert-warning {
+    @apply dd-alert bg-yellow-50 dark:bg-yellow-900/30 border-yellow-400;
+  }
+
+  .dd-alert-error {
+    @apply dd-alert bg-red-50 dark:bg-red-900/30 border-red-400;
+  }
+}
+
+/* Utilities layer - utility classes */
+@layer utilities {
+  /* Custom scrollbar */
+  .dd-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.400') theme('colors.gray.100');
+  }
+
+  .dd-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .dd-scrollbar::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+
+  .dd-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  }
+
+  .dd-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500 dark:bg-gray-500;
+  }
+
+  /* Gradient backgrounds */
+  .dd-gradient-primary {
+    background: linear-gradient(135deg, theme('colors.blue.600') 0%, theme('colors.blue.800') 100%);
+  }
+
+  .dd-gradient-critical {
+    background: linear-gradient(135deg, theme('colors.red.500') 0%, theme('colors.orange.500') 100%);
+  }
+
+  /* Transition utilities */
+  .dd-transition-smooth {
+    @apply transition-all duration-150 ease-in-out;
+  }
+
+  /* Loading state */
+  .dd-loading {
+    @apply animate-pulse;
+  }
+
+  /* Skeleton loader */
+  .dd-skeleton {
+    @apply bg-gray-200 dark:bg-gray-700 animate-pulse rounded;
+  }
+}
+
+/* Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Accessibility improvements */
+.sr-only {
+  @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+  clip: rect(0, 0, 0, 0);
+}
+
+/* Print styles */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+
+  .dd-card {
+    @apply border border-black;
+  }
+
+  /* Hide non-essential elements when printing */
+  nav,
+  .no-print {
+    display: none !important;
+  }
+}
