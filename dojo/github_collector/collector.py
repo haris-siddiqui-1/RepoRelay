@@ -253,6 +253,9 @@ class GitHubRepositoryCollector:
             product.last_deployment_date = metadata['last_deployment_date']
             product.is_cicd_platform = metadata['is_cicd_platform']
 
+            # Sync has_ci_cd field with is_cicd_platform for dashboard compatibility
+            product.has_ci_cd = metadata['is_cicd_platform']
+
             # Repository metadata
             product.github_url = repo.html_url
             product.github_repo_id = str(repo.id)

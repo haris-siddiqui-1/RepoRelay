@@ -339,7 +339,10 @@ var GitHubInsightsDashboard = (function() {
         }
 
         var $tableContainer = $('<div>').addClass('widget-table table-responsive');
-        var $table = $('<table>').addClass('table table-striped table-condensed');
+        var tableId = widgetId + '-table';
+        var $table = $('<table>')
+            .addClass('table table-striped table-condensed')
+            .attr('id', tableId);
 
         // Build table header from first row keys
         var keys = Object.keys(data[0]);
@@ -371,6 +374,26 @@ var GitHubInsightsDashboard = (function() {
 
         $tableContainer.append($table);
         $('#' + widgetId + ' .widget-body').append($tableContainer);
+
+        // Initialize DataTables for sorting, pagination, and search
+        $('#' + tableId).DataTable({
+            paging: true,
+            pageLength: 10,
+            lengthMenu: [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+            searching: true,
+            ordering: true,
+            info: true,
+            autoWidth: false,
+            language: {
+                search: "Filter:",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                infoEmpty: "Showing 0 to 0 of 0 entries",
+                infoFiltered: "(filtered from _TOTAL_ total entries)",
+                zeroRecords: "No matching records found",
+                emptyTable: "No data available in table"
+            }
+        });
     }
 
     /**
