@@ -320,6 +320,7 @@ class GitHubGraphQLClient:
         parsed['branchProtection'] = self._parse_connection(repo_data.get('branchProtectionRules'))
         parsed['pullRequests'] = self._parse_pull_requests(repo_data.get('pullRequests'))
         parsed['vulnerabilityAlerts'] = self._parse_connection(repo_data.get('vulnerabilityAlerts'))
+        parsed['issues'] = self._parse_connection(repo_data.get('issues'))
 
         return parsed
 
@@ -447,15 +448,20 @@ class GitHubGraphQLClient:
         if not prs:
             return {
                 'totalCount': 0,
+                'openCount': 0,
                 'recent': []
             }
 
         nodes = prs.get('nodes', [])
         recent = []
+        open_count = 0
         for node in nodes:
             author = node.get('author', {})
+            state = node.get('state')
+            if state == 'OPEN':
+                open_count += 1
             recent.append({
-                'state': node.get('state'),
+                'state': state,
                 'updatedAt': node.get('updatedAt'),
                 'createdAt': node.get('createdAt'),
                 'author': author.get('login') if author else None
@@ -463,6 +469,7 @@ class GitHubGraphQLClient:
 
         return {
             'totalCount': prs.get('totalCount', 0),
+            'openCount': open_count,
             'recent': recent
         }
 

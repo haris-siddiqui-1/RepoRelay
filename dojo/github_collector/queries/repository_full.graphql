@@ -133,6 +133,11 @@ query GetRepositoryData($owner: String!, $name: String!) {
     vulnerabilityAlerts(first: 1) {
       totalCount         # >0 = has vulnerability alerts (security scanning enabled)
     }
+
+    # Open issues count (enterprise work backlog metric)
+    issues(states: OPEN) {
+      totalCount         # Number of currently open issues
+    }
   }
 
   # ===== RATE LIMIT MONITORING =====
