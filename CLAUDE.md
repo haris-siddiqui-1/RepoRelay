@@ -19,7 +19,8 @@ DefectDojo is an OWASP Flagship project that provides DevSecOps and vulnerabilit
 **Backend:** Python 3.13 + Django 5.1.14 + Django REST Framework 3.16.1
 **Database:** PostgreSQL (exclusive - no MySQL/SQLite support)
 **Async:** Celery 5.5.3 with Valkey/Redis broker
-**Frontend:** Bootstrap 3.4.1, jQuery 3.7.1, DataTables
+**Frontend (Classic):** Bootstrap 3.4.1, jQuery 3.7.1, DataTables
+**Frontend (Modern Preview):** Tailwind CSS 3.4, Alpine.js 3.13, Chart.js 4.4, Vite 5.0
 **Deployment:** Docker Compose with uWSGI and NGINX
 
 ## Key Commands
@@ -142,6 +143,12 @@ Each feature module follows a consistent pattern:
   - Security alerts collection (alerts_collector.py, findings_converter.py) - See README_ALERTS.md
   - **Insights dashboard** (insights/ module) - 25 insights across 5 categories with widget-based UI
   - Supports GraphQL API v4 (bulk operations) with REST API fallback
+- `dojo/frontend/` - Modern UI build system (NEW - November 2025):
+  - Vite 5.0 build tool with HMR development server
+  - Tailwind CSS 3.4 with JIT compilation
+  - Alpine.js 3.13 reactive components (dark mode, dropdown, modal, toast)
+  - Chart.js 4.4 for visualizations
+  - See README at dojo/frontend/README.md
 
 ### REST API Architecture
 **Base URL:** `/api/v2/`
@@ -540,6 +547,84 @@ class MyCustomInsight(BaseInsight):
 - Scheduled reports: CSV/PDF export, automated email delivery
 - Custom insights: Admin UI for creating insights without code
 - Trend analysis: Historical data tracking, time-series visualizations
+
+### Modern Dashboard UI (Preview - November 2025)
+
+**Overview:**
+A redesigned dashboard interface using a modern frontend stack (Tailwind CSS, Alpine.js, Vite) with an enterprise dark-mode-first aesthetic. This is a preview feature that runs alongside the classic Bootstrap-based UI.
+
+**URL:** `/dashboard_modern`
+**View:** `dojo/home/views.py:dashboard_modern()` (lines 72-109)
+**Templates:**
+- `dojo/templates/base_modern.html` - Base template with shared assets, navigation, command palette
+- `dojo/templates/dojo/dashboard_modern.html` - Dashboard content with stat cards and charts
+
+**Design System:**
+
+- **Color Palette:** Enterprise dark-mode-first with violet (#8B5CF6) accent
+- **Typography:** Plus Jakarta Sans (display) + JetBrains Mono (code/numbers)
+- **Effects:** Glass morphism (backdrop-blur), subtle shadows, violet glow on hover
+- **Grid:** 4px spacing system throughout
+- **Animations:** Staggered reveal on page load (200ms cubic-bezier easing)
+
+**Key Features:**
+
+1. **Collapsible Sidebar Navigation** - Responsive sidebar with smooth transitions
+2. **Command Palette** - Keyboard-driven navigation (Cmd+K / Ctrl+K)
+   - Full arrow key navigation
+   - Enter to select, Escape to close
+   - Fuzzy search across all navigation items
+3. **Dark/Light Mode Toggle** - CSS custom properties with localStorage persistence
+4. **Stat Cards** - Glass morphism cards with hover effects
+   - Active Engagements
+   - Findings Last 7 Days
+   - Closed Findings
+   - Risk Accepted
+5. **Chart.js Visualizations** - Pie chart (severity distribution), line chart (trends by month)
+   - Date-fns adapter for time-axis support
+   - Responsive containers with proper aspect ratio handling
+
+**Frontend Build System:**
+
+Located in `dojo/frontend/`:
+- **Package:** `npm install` in dojo/frontend/
+- **Dev Server:** `npm run dev` (http://localhost:3000 with HMR)
+- **Production Build:** `npm run build` (outputs to ../static/dist/)
+- **Assets:** Fingerprinted filenames for cache busting
+
+**Dependencies:**
+- Tailwind CSS 3.4.0
+- Alpine.js 3.13.3
+- Chart.js 4.4.1 (with chartjs-adapter-date-fns)
+- Vite 5.0.10
+- Heroicons 2.1.1
+
+**Alpine.js Components:**
+- `darkMode` - Theme toggle with system preference detection
+- `dropdown` - Accessible dropdown menus
+- `modal` - Dialog/modal windows
+- `toast` - Toast notifications (success, error, warning, info)
+
+**Integration Notes:**
+- Uses same backend data as classic dashboard (engagement counts, findings, severity stats)
+- Breadcrumb system maintained for navigation consistency
+- Session-based authentication (same as classic UI)
+- Classic UI remains default at `/dashboard`
+- Toggle between views via navigation link
+
+**Performance:**
+- Bundle sizes (gzipped): CSS ~15-25KB, Alpine.js ~15KB, Chart.js ~30KB, Custom JS ~10-15KB
+- Total: ~70-85KB gzipped
+- Tree-shaking and CSS purging enabled via Vite
+
+**Browser Support:**
+- Chrome, Firefox, Safari, Edge (latest 2 versions)
+- Mobile Safari (iOS 14+), Mobile Chrome (Android 10+)
+
+**Related Documentation:**
+- Frontend README: dojo/frontend/README.md
+- Quick Start: dojo/frontend/QUICK_START.md
+- Design System: dojo/frontend/DESIGN_SYSTEM.md (if exists)
 
 ## Development Guidelines
 

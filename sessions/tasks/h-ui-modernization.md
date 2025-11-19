@@ -350,5 +350,7 @@ dojo/frontend/
 - Must work without JavaScript (progressive enhancement)
 - Must support modern browsers only (no IE11)
 
+---
+
 **Status**: Ready to begin Phase 1
 **Next Step**: Set up build pipeline and development environment
