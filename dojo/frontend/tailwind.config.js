@@ -121,8 +121,7 @@ export default {
         },
       },
       fontFamily: {
-        display: ['"Cormorant Garamond"', 'Georgia', 'ui-serif', 'serif'],
-        sans: ['"IBM Plex Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        sans: ['"Plus Jakarta Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"Fira Code"', 'Consolas', 'Monaco', 'monospace'],
       },
       fontSize: {
@@ -139,15 +138,46 @@ export default {
       },
       colors: {
         ...require('tailwindcss/defaultTheme').colors,
-        'refined': {
-          'warm-gray': '#F5F5F3',
-          'sage': '#8B9B8E',
-          'charcoal': '#2C2C2C',
-          'accent': '#B4A7A0',
-          'off-white': '#FAFAF9',
-          'whisper': '#E8E8E6',
-          'terracotta': '#C45653',
-          'sage-green': '#6B8E75',
+        // Enterprise Dark-Mode-First Palette
+        'enterprise': {
+          'bg-primary': '#0f1419',
+          'bg-card': '#1c2128',
+          'bg-elevated': '#22272e',
+          'bg-hover': '#2d333b',
+          'text-primary': '#F0F6FC',
+          'text-secondary': '#8b949e',
+          'text-muted': '#6e7681',
+          'border': 'rgba(255, 255, 255, 0.1)',
+        },
+        // Distinctive Accent - Violet
+        'accent': {
+          50: '#f5f3ff',
+          100: '#ede9fe',
+          200: '#ddd6fe',
+          300: '#c4b5fd',
+          400: '#a78bfa',
+          500: '#8B5CF6',
+          600: '#7c3aed',
+          700: '#6d28d9',
+          800: '#5b21b6',
+          900: '#4c1d95',
+        },
+        // Semantic Colors
+        'success': {
+          DEFAULT: '#10B981',
+          dark: '#059669',
+        },
+        'warning': {
+          DEFAULT: '#F59E0B',
+          dark: '#D97706',
+        },
+        'error': {
+          DEFAULT: '#EF4444',
+          dark: '#DC2626',
+        },
+        'info': {
+          DEFAULT: '#3B82F6',
+          dark: '#2563EB',
         },
       },
       boxShadow: {
@@ -166,9 +196,16 @@ export default {
         'dd-2xl': '1rem',     // 16px
       },
       spacing: {
-        '18': '4.5rem',
-        '88': '22rem',
-        '128': '32rem',
+        // 4px grid system - standard Tailwind values plus custom
+        '18': '4.5rem',   // 72px
+        '22': '5.5rem',   // 88px
+        '30': '7.5rem',   // 120px
+        '88': '22rem',    // 352px
+        '128': '32rem',   // 512px
+        // Card padding values
+        'card': '1.5rem', // 24px - per design brief
+        'card-sm': '1rem', // 16px
+        'card-lg': '2rem', // 32px
       },
       animation: {
         'fade-in': 'fadeIn 0.6s ease-out',

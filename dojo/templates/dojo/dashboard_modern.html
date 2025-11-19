@@ -11,63 +11,67 @@
             position: relative;
         }
 
-        /* Staggered animation delays for cards */
+        /* Orchestrated staggered animation reveals */
         .card-1 { animation-delay: 0ms; }
-        .card-2 { animation-delay: 100ms; }
-        .card-3 { animation-delay: 200ms; }
-        .card-4 { animation-delay: 300ms; }
-        .chart-1 { animation-delay: 400ms; }
-        .chart-2 { animation-delay: 500ms; }
+        .card-2 { animation-delay: 75ms; }
+        .card-3 { animation-delay: 150ms; }
+        .card-4 { animation-delay: 225ms; }
+        .chart-1 { animation-delay: 350ms; }
+        .chart-2 { animation-delay: 425ms; }
+
+        /* Enhanced page header animation */
+        .page-header {
+            animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        @keyframes headerReveal {
+            0% {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 {% endblock %}
 
 {% block content %}
-    <!-- Refined Minimalist Dashboard Header -->
-    <div class="mb-12 animate-fade-in">
+    <!-- Enterprise Dashboard Header -->
+    <div class="mb-12 page-header">
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="font-display text-6xl font-normal leading-tight text-refined-charcoal tracking-tight">{% trans "Dashboard" %}</h1>
-                <p class="font-sans mt-3 text-base font-light text-refined-sage tracking-wide">{% trans "Security insights and activity overview" %}</p>
+                <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight">{% trans "Dashboard" %}</h1>
+                <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">{% trans "Security insights and activity overview" %}</p>
             </div>
 
-            <!-- Dark Mode Toggle -->
-            <div x-data="darkMode">
-                <button @click="toggle"
-                        class="p-2.5 rounded-lg transition-all duration-250 hover:bg-gray-100 dark:hover:bg-gray-800"
-                        aria-label="Toggle dark mode">
-                    <svg x-show="!dark" class="w-5 h-5 text-refined-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-                    </svg>
-                    <svg x-show="dark" class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                    </svg>
-                </button>
-            </div>
         </div>
     </div>
 
     <!-- Stats Cards Grid - Dramatic whitespace with staggered animations -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
         <!-- Active Engagements Card -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up card-1">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up card-1">
             <div class="flex items-start justify-between mb-6">
                 <div class="flex-1">
-                    <p class="font-sans text-sm font-medium text-refined-sage tracking-widest uppercase">{% trans "Active Engagements" %}</p>
-                    <p class="font-display mt-4 text-5xl font-normal text-refined-charcoal leading-none">{{ engagement_count }}</p>
-                    <p class="font-sans mt-2 text-sm font-light text-refined-sage">
+                    <p class="font-sans text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase">{% trans "Active Engagements" %}</p>
+                    <p class="font-sans mt-4 text-5xl font-bold text-enterprise-text-primary leading-none" style="text-shadow: 0 0 40px rgba(139, 92, 246, 0.15);">{{ engagement_count }}</p>
+                    <p class="font-sans mt-2 text-sm font-light text-enterprise-text-secondary">
                         {% trans "In progress" %}
                     </p>
                 </div>
-                <div class="p-3.5 bg-refined-sage/10 rounded-xl">
-                    <svg class="w-6 h-6 text-refined-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3.5 bg-enterprise-text-secondary/10 rounded-xl">
+                    <svg class="w-6 h-6 text-enterprise-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
             </div>
             <div>
-                <a href="{% url 'engagement' %}" class="font-sans text-sm font-normal text-refined-charcoal no-underline transition-colors duration-250 inline-flex items-center group hover:text-refined-sage">
+                <a href="{% url 'engagement' %}" class="font-sans text-sm font-normal text-accent-400 no-underline transition-colors duration-200 inline-flex items-center group hover:text-accent-300">
                     {% trans "View all engagements" %}
-                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-250 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-200 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
                 </a>
@@ -75,12 +79,12 @@
         </div>
 
         <!-- Findings Last 7 Days Card -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up card-2">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up card-2">
             <div class="flex items-start justify-between mb-6">
                 <div class="flex-1">
-                    <p class="font-sans text-sm font-medium text-refined-sage tracking-widest uppercase">{% trans "Last Seven Days" %}</p>
-                    <p class="font-display mt-4 text-5xl font-normal text-refined-charcoal leading-none">{{ finding_count }}</p>
-                    <p class="font-sans mt-2 text-sm font-light text-refined-terracotta">
+                    <p class="font-sans text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase">{% trans "Last Seven Days" %}</p>
+                    <p class="font-sans mt-4 text-5xl font-bold text-enterprise-text-primary leading-none" style="text-shadow: 0 0 40px rgba(139, 92, 246, 0.15);">{{ finding_count }}</p>
+                    <p class="font-sans mt-2 text-sm font-light text-error">
                         <span class="inline-flex items-center">
                             <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
@@ -89,16 +93,16 @@
                         </span>
                     </p>
                 </div>
-                <div class="p-3.5 bg-refined-terracotta/10 rounded-xl">
-                    <svg class="w-6 h-6 text-refined-terracotta" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3.5 bg-error/10 rounded-xl">
+                    <svg class="w-6 h-6 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                 </div>
             </div>
             <div>
-                <a href="{% url 'all_findings' %}?duplicate=2&date=2&o=-date" class="font-sans text-sm font-normal text-refined-charcoal no-underline transition-colors duration-250 inline-flex items-center group hover:text-refined-sage">
+                <a href="{% url 'all_findings' %}?duplicate=2&date=2&o=-date" class="font-sans text-sm font-normal text-accent-400 no-underline transition-colors duration-200 inline-flex items-center group hover:text-accent-300">
                     {% trans "View finding details" %}
-                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-250 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-200 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
                 </a>
@@ -106,12 +110,12 @@
         </div>
 
         <!-- Closed Findings Card -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up card-3">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up card-3">
             <div class="flex items-start justify-between mb-6">
                 <div class="flex-1">
-                    <p class="font-sans text-sm font-medium text-refined-sage tracking-widest uppercase">{% trans "Closed In Last Seven Days" %}</p>
-                    <p class="font-display mt-4 text-5xl font-normal text-refined-charcoal leading-none">{{ mitigated_count }}</p>
-                    <p class="font-sans mt-2 text-sm font-light text-refined-sage-green">
+                    <p class="font-sans text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase">{% trans "Closed In Last Seven Days" %}</p>
+                    <p class="font-sans mt-4 text-5xl font-bold text-enterprise-text-primary leading-none" style="text-shadow: 0 0 40px rgba(139, 92, 246, 0.15);">{{ mitigated_count }}</p>
+                    <p class="font-sans mt-2 text-sm font-light text-enterprise-text-secondary-green">
                         <span class="inline-flex items-center">
                             <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
@@ -120,16 +124,16 @@
                         </span>
                     </p>
                 </div>
-                <div class="p-3.5 bg-refined-sage-green/10 rounded-xl">
-                    <svg class="w-6 h-6 text-refined-sage-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3.5 bg-success/10 rounded-xl">
+                    <svg class="w-6 h-6 text-enterprise-text-secondary-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                 </div>
             </div>
             <div>
-                <a href="{% url 'closed_findings' %}?duplicate=2&mitigated=2" class="font-sans text-sm font-normal text-refined-charcoal no-underline transition-colors duration-250 inline-flex items-center group hover:text-refined-sage">
+                <a href="{% url 'closed_findings' %}?duplicate=2&mitigated=2" class="font-sans text-sm font-normal text-accent-400 no-underline transition-colors duration-200 inline-flex items-center group hover:text-accent-300">
                     {% trans "View closed findings" %}
-                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-250 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-200 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
                 </a>
@@ -137,25 +141,25 @@
         </div>
 
         <!-- Risk Accepted Card -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up card-4">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up card-4">
             <div class="flex items-start justify-between mb-6">
                 <div class="flex-1">
-                    <p class="font-sans text-sm font-medium text-refined-sage tracking-widest uppercase">{% trans "Risk Accepted" %}</p>
-                    <p class="font-display mt-4 text-5xl font-normal text-refined-charcoal leading-none">{{ accepted_count }}</p>
-                    <p class="font-sans mt-2 text-sm font-light text-refined-sage">
+                    <p class="font-sans text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase">{% trans "Risk Accepted" %}</p>
+                    <p class="font-sans mt-4 text-5xl font-bold text-enterprise-text-primary leading-none" style="text-shadow: 0 0 40px rgba(139, 92, 246, 0.15);">{{ accepted_count }}</p>
+                    <p class="font-sans mt-2 text-sm font-light text-enterprise-text-secondary">
                         {% trans "Last seven days" %}
                     </p>
                 </div>
-                <div class="p-3.5 bg-refined-accent/10 rounded-xl">
-                    <svg class="w-6 h-6 text-refined-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="p-3.5 bg-warning/10 rounded-xl">
+                    <svg class="w-6 h-6 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                 </div>
             </div>
             <div>
-                <a href="{% url 'accepted_findings' %}?duplicate=2&risk_acceptance__created__date=2" class="font-sans text-sm font-normal text-refined-charcoal no-underline transition-colors duration-250 inline-flex items-center group hover:text-refined-sage">
+                <a href="{% url 'accepted_findings' %}?duplicate=2&risk_acceptance__created__date=2" class="font-sans text-sm font-normal text-accent-400 no-underline transition-colors duration-200 inline-flex items-center group hover:text-accent-300">
                     {% trans "View accepted risks" %}
-                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-250 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4 ml-1.5 transition-transform duration-200 group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                     </svg>
                 </a>
@@ -166,9 +170,9 @@
     <!-- Charts Row - Refined Aesthetic with staggered animations -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
         <!-- Severity Pie Chart -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up chart-1">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up chart-1">
             <div class="mb-8">
-                <h3 class="font-display text-2xl font-normal text-refined-charcoal tracking-tight">{% trans "Historical Finding Severity" %}</h3>
+                <h3 class="font-sans text-2xl font-normal text-enterprise-text-primary tracking-tight">{% trans "Historical Finding Severity" %}</h3>
             </div>
             <div class="chart-container">
                 <canvas id="severityPieChart"></canvas>
@@ -176,9 +180,9 @@
         </div>
 
         <!-- Severity Trend Chart -->
-        <div class="refined-card rounded-lg p-8 animate-slide-up chart-2">
+        <div class="enterprise-card rounded-lg p-8 animate-slide-up chart-2">
             <div class="mb-8">
-                <h3 class="font-display text-2xl font-normal text-refined-charcoal tracking-tight">{% trans "Reported Finding Severity by Month" %}</h3>
+                <h3 class="font-sans text-2xl font-normal text-enterprise-text-primary tracking-tight">{% trans "Reported Finding Severity by Month" %}</h3>
             </div>
             <div class="chart-container">
                 <canvas id="severityTrendChart"></canvas>
@@ -187,15 +191,15 @@
     </div>
 
     <!-- Demo Alert - Refined Aesthetic -->
-    <div class="bg-refined-sage/10 border-l-4 border-refined-sage px-8 py-6 rounded-r-lg animate-fade-in">
+    <div class="bg-enterprise-text-secondary/10 border-l-4 border-enterprise-text-secondary px-8 py-6 rounded-r-lg animate-fade-in">
         <div class="flex items-start">
             <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-refined-sage mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <svg class="h-5 w-5 text-enterprise-text-secondary mt-0.5" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
                 </svg>
             </div>
             <div class="ml-4">
-                <p class="font-sans text-base font-light text-refined-charcoal leading-relaxed">
+                <p class="font-sans text-base font-light text-enterprise-text-primary leading-relaxed">
                     <span class="font-medium">{% trans "Modern UI Preview" %}:</span> {% trans "This is a demonstration of DefectDojo's new design system using Tailwind CSS and Alpine.js. Toggle dark mode using the button above!" %}
                 </p>
             </div>
@@ -237,7 +241,7 @@
                                     usePointStyle: true,
                                     padding: 15,
                                     font: {
-                                        family: '"IBM Plex Sans", sans-serif',
+                                        family: '"Plus Jakarta Sans", sans-serif',
                                         size: 12
                                     }
                                 }
@@ -246,11 +250,11 @@
                                 backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                 padding: 12,
                                 titleFont: {
-                                    family: '"IBM Plex Sans", sans-serif',
+                                    family: '"Plus Jakarta Sans", sans-serif',
                                     size: 13
                                 },
                                 bodyFont: {
-                                    family: '"IBM Plex Sans", sans-serif',
+                                    family: '"Plus Jakarta Sans", sans-serif',
                                     size: 12
                                 }
                             }
@@ -268,12 +272,12 @@
                 let low = [];
 
                 {% for month in by_month %}
-                    month = {{month|safe}};
-                    ttp = new Date(month['y'] + '-01').getTime();
-                    critical.push({x: ttp, y: month['a'] || 0});
-                    high.push({x: ttp, y: month['b'] || 0});
-                    medium.push({x: ttp, y: month['c'] || 0});
-                    low.push({x: ttp, y: month['d'] || 0});
+                    const monthData = {{month|safe}};
+                    const ttp = new Date(monthData['y'] + '-01').getTime();
+                    critical.push({x: ttp, y: monthData['a'] || 0});
+                    high.push({x: ttp, y: monthData['b'] || 0});
+                    medium.push({x: ttp, y: monthData['c'] || 0});
+                    low.push({x: ttp, y: monthData['d'] || 0});
                 {% endfor %}
 
                 new Chart(trendCtx, {
@@ -345,7 +349,7 @@
                                     usePointStyle: true,
                                     padding: 15,
                                     font: {
-                                        family: '"IBM Plex Sans", sans-serif',
+                                        family: '"Plus Jakarta Sans", sans-serif',
                                         size: 12
                                     }
                                 }
