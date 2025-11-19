@@ -1,0 +1,420 @@
+{% load i18n %}
+{% load get_banner %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% trans "Login" %} - DefectDojo</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f1419;
+            color: #e6edf3;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 480px;
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-logo h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #8B5CF6;
+            margin-bottom: 8px;
+        }
+
+        .login-logo p {
+            font-size: 14px;
+            color: #7d8590;
+        }
+
+        .login-card {
+            background: #1c2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+        }
+
+        .login-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .banner-message {
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid #8B5CF6;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: #e6edf3;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #e6edf3;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f1419;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: #e6edf3;
+            font-size: 14px;
+            transition: border-color 200ms ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #8B5CF6;
+        }
+
+        .form-input::placeholder {
+            color: #7d8590;
+        }
+
+        .form-errors {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid #f85149;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            color: #f85149;
+            font-size: 13px;
+        }
+
+        .form-errors ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .form-errors li {
+            margin-bottom: 4px;
+        }
+
+        .form-errors li:last-child {
+            margin-bottom: 0;
+        }
+
+        .show-password-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .show-password-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: #8B5CF6;
+        }
+
+        .show-password-toggle label {
+            font-size: 14px;
+            color: #7d8590;
+            cursor: pointer;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 200ms ease;
+            border: none;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: #8B5CF6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #7C3AED;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e6edf3;
+            margin-top: 12px;
+        }
+
+        .btn-secondary:hover {
+            border-color: #8B5CF6;
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .form-links {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .form-links a {
+            color: #8B5CF6;
+            text-decoration: none;
+            font-size: 14px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .form-links a:hover {
+            color: #7C3AED;
+            text-decoration: underline;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 24px 0;
+            color: #7d8590;
+            font-size: 13px;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .divider::before {
+            margin-right: 12px;
+        }
+
+        .divider::after {
+            margin-left: 12px;
+        }
+
+        .sso-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .errorlist {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+
+        .errorlist li {
+            background: rgba(248, 81, 73, 0.1);
+            border: 1px solid #f85149;
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #f85149;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 640px) {
+            .login-card {
+                padding: 24px;
+            }
+
+            body {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-logo">
+            <h1>DefectDojo</h1>
+            <p>{% trans "DevSecOps Vulnerability Management" %}</p>
+        </div>
+
+        <div class="login-card">
+            <h2 class="login-title">{% trans "Login" %}</h2>
+
+            {% if "banner_enable"|get_banner_conf %}
+                <div class="banner-message">
+                    {{ "banner_message"|get_banner_conf }}
+                </div>
+            {% endif %}
+
+            {% if form.non_field_errors %}
+                <div class="form-errors">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
+            <form method="POST" autocomplete="off">
+                {% csrf_token %}
+
+                {% if SHOW_LOGIN_FORM or 'force_login_form' in request.GET %}
+                    <div class="form-group">
+                        <label class="form-label" for="{{ form.username.id_for_label }}">
+                            {% trans "Username" %}<span style="color: #f85149;">*</span>
+                        </label>
+                        {{ form.username.errors }}
+                        <input type="text"
+                               name="{{ form.username.name }}"
+                               id="{{ form.username.id_for_label }}"
+                               class="form-input"
+                               placeholder="{% trans 'Enter your username' %}"
+                               required
+                               {% if form.username.value %}value="{{ form.username.value }}"{% endif %}>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="{{ form.password.id_for_label }}">
+                            {% trans "Password" %}<span style="color: #f85149;">*</span>
+                        </label>
+                        {{ form.password.errors }}
+                        <input type="password"
+                               name="{{ form.password.name }}"
+                               id="{{ form.password.id_for_label }}"
+                               class="form-input"
+                               placeholder="{% trans 'Enter your password' %}"
+                               required>
+                    </div>
+
+                    <div class="show-password-toggle">
+                        <input type="checkbox" id="showPassword" onclick="togglePassVisibility()">
+                        <label for="showPassword">{% trans "Show Password" %}</label>
+                    </div>
+
+                    {% if CLASSIC_AUTH_ENABLED %}
+                        <button type="submit" class="btn btn-primary">
+                            {% trans "Login" %}
+                        </button>
+
+                        {% if FORGOT_PASSWORD or FORGOT_USERNAME %}
+                            <div class="form-links">
+                                {% if FORGOT_PASSWORD %}
+                                    <a id="reset-password" href="{% url 'password_reset' %}">
+                                        {% trans "I forgot my password" %}
+                                    </a>
+                                {% endif %}
+                                {% if FORGOT_USERNAME %}
+                                    <a id="forgot-username" href="{% url 'forgot_username' %}">
+                                        {% trans "I forgot my username" %}
+                                    </a>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                {% endif %}
+            </form>
+
+            {% if OIDC_ENABLED or GOOGLE_ENABLED or OKTA_ENABLED or AZUREAD_TENANT_OAUTH2_ENABLED or GITLAB_ENABLED or AUTH0_ENABLED or KEYCLOAK_ENABLED or GITHUB_ENTERPRISE_ENABLED or SAML2_ENABLED %}
+                <div class="divider">{% trans "OR" %}</div>
+
+                <div class="sso-buttons">
+                    {% if OIDC_ENABLED %}
+                        <a href="{% url 'social:begin' 'oidc' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {{ SOCIAL_AUTH_OIDC_LOGIN_BUTTON_TEXT }}
+                        </a>
+                    {% endif %}
+
+                    {% if GOOGLE_ENABLED %}
+                        <a href="{% url 'social:begin' 'google-oauth2' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with Google" %}
+                        </a>
+                    {% endif %}
+
+                    {% if OKTA_ENABLED %}
+                        <a href="{% url 'social:begin' 'okta-oauth2' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with OKTA" %}
+                        </a>
+                    {% endif %}
+
+                    {% if AZUREAD_TENANT_OAUTH2_ENABLED %}
+                        <a href="{% url 'social:begin' 'azuread-tenant-oauth2' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with Azure AD" %}
+                        </a>
+                    {% endif %}
+
+                    {% if GITLAB_ENABLED %}
+                        <a href="{% url 'social:begin' 'gitlab' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with Gitlab" %}
+                        </a>
+                    {% endif %}
+
+                    {% if AUTH0_ENABLED %}
+                        <a href="{% url 'social:begin' 'auth0' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with Auth0" %}
+                        </a>
+                    {% endif %}
+
+                    {% if KEYCLOAK_ENABLED %}
+                        <a href="{% url 'social:begin' 'keycloak' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {{ SOCIAL_AUTH_KEYCLOAK_LOGIN_BUTTON_TEXT }}
+                        </a>
+                    {% endif %}
+
+                    {% if GITHUB_ENTERPRISE_ENABLED %}
+                        <a href="{% url 'social:begin' 'github-enterprise' %}?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {% trans "Login with GitHub Enterprise" %}
+                        </a>
+                    {% endif %}
+
+                    {% if SAML2_ENABLED %}
+                        <a id="oauth-login-saml" rel="nofollow" data-method="post" href="/saml2/login?next={{ request.GET.next }}" class="btn btn-secondary">
+                            {{ SAML2_LOGIN_BUTTON_TEXT }}
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function togglePassVisibility() {
+            const passwordInput = document.getElementById('{{ form.password.id_for_label }}');
+            const checkbox = document.getElementById('showPassword');
+            passwordInput.type = checkbox.checked ? 'text' : 'password';
+        }
+    </script>
+</body>
+</html>

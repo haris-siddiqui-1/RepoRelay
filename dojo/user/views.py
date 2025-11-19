@@ -59,7 +59,7 @@ labels = get_labels()
 
 
 class DojoLoginView(LoginView):
-    template_name = "dojo/login.html"
+    template_name = "dojo/login_modern.html"
     authentication_form = AuthenticationForm
 
     def form_valid(self, form):
@@ -157,7 +157,7 @@ def login_view(request):
         except:
             return HttpResponseRedirect(reverse("social:begin", args=[social_auth]))
     else:
-        return DojoLoginView.as_view(template_name="dojo/login.html", authentication_form=AuthenticationForm)(request)
+        return DojoLoginView.as_view(template_name="dojo/login_modern.html", authentication_form=AuthenticationForm)(request)
 
 
 def logout_view(request):

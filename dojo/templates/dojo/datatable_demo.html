@@ -1,0 +1,364 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Data Table Demo - DefectDojo</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Data Table Component -->
+    <script src="{% static 'dojo/js/alpine/components/dataTable.js' %}"></script>
+    <link rel="stylesheet" href="{% static 'dojo/css/components/dataTable.css' %}">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0f1419;
+            color: #e6edf3;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            min-height: 100vh;
+        }
+
+        .demo-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .demo-header {
+            margin-bottom: 24px;
+        }
+
+        .demo-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+        }
+
+        .demo-subtitle {
+            font-size: 14px;
+            color: #7d8590;
+            margin: 0;
+        }
+
+        .demo-stats {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .demo-stat {
+            background: #1c2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px 20px;
+        }
+
+        .demo-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #8B5CF6;
+        }
+
+        .demo-stat-label {
+            font-size: 12px;
+            color: #7d8590;
+            margin-top: 4px;
+        }
+
+        .demo-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .demo-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: #1c2128;
+            color: #e6edf3;
+            transition: all 200ms ease;
+        }
+
+        .demo-btn:hover {
+            border-color: #8B5CF6;
+        }
+
+        .demo-btn.primary {
+            background: #8B5CF6;
+            border-color: #8B5CF6;
+            color: white;
+        }
+
+        .demo-btn.primary:hover {
+            background: #7C3AED;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-header">
+            <h1 class="demo-title">Enterprise Data Table Component</h1>
+            <p class="demo-subtitle">DefectDojo's first Alpine.js component with virtual scrolling, sorting, and bulk actions</p>
+        </div>
+
+        <!-- Generate demo data in JavaScript -->
+        <script>
+            // Generate 1000 sample findings for performance testing
+            function generateDemoData() {
+                const severities = ['Critical', 'High', 'Medium', 'Low', 'Info'];
+                const statuses = ['Active', 'Verified', 'Mitigated', 'False Positive'];
+                const products = ['Product A', 'Product B', 'Product C', 'Product D', 'Product E'];
+                const findings = [];
+
+                for (let i = 0; i < 1000; i++) {
+                    findings.push({
+                        id: i + 1,
+                        title: `Finding ${i + 1}: SQL Injection in ${['login', 'search', 'user', 'admin', 'api'][i % 5]} endpoint`,
+                        severity: severities[Math.floor(Math.random() * severities.length)],
+                        cwe: `CWE-${[89, 79, 287, 352, 22, 94][Math.floor(Math.random() * 6)]}`,
+                        cve: `CVE-2024-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`,
+                        status: statuses[Math.floor(Math.random() * statuses.length)],
+                        product: products[Math.floor(Math.random() * products.length)],
+                        date: `2024-${String(Math.floor(Math.random() * 12) + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')}`,
+                        age: Math.floor(Math.random() * 365)
+                    });
+                }
+                return findings;
+            }
+
+            window.demoData = generateDemoData();
+        </script>
+
+        <!-- Initialize with demo data -->
+        <div x-data="dataTable({
+            data: window.demoData,
+            columns: [
+                { key: 'id', label: 'ID', sortType: 'number' },
+                { key: 'severity', label: 'Severity', sortType: 'severity' },
+                { key: 'title', label: 'Title', sortType: 'string' },
+                { key: 'cwe', label: 'CWE', sortType: 'string' },
+                { key: 'cve', label: 'CVE', sortType: 'string' },
+                { key: 'status', label: 'Status', sortType: 'string' },
+                { key: 'product', label: 'Product', sortType: 'string' },
+                { key: 'date', label: 'Date', sortType: 'date' },
+                { key: 'age', label: 'Age (days)', sortType: 'number' }
+            ],
+            csrfToken: '{{ csrf_token }}',
+            bulkActionUrl: '#'
+        })">
+
+            <!-- Stats -->
+            <div class="demo-stats">
+                <div class="demo-stat">
+                    <div class="demo-stat-value" x-text="stats.total"></div>
+                    <div class="demo-stat-label">Total Findings</div>
+                </div>
+                <div class="demo-stat">
+                    <div class="demo-stat-value" x-text="stats.filtered"></div>
+                    <div class="demo-stat-label">Filtered</div>
+                </div>
+                <div class="demo-stat">
+                    <div class="demo-stat-value" x-text="stats.selected"></div>
+                    <div class="demo-stat-label">Selected</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="demo-controls">
+                <button class="demo-btn" @click="selectBySeverity('Critical')">Select Critical</button>
+                <button class="demo-btn" @click="selectBySeverity('High')">Select High</button>
+                <button class="demo-btn" @click="clearSelection()">Clear Selection</button>
+                <button class="demo-btn" @click="collapseAll()">Collapse All</button>
+                <input type="text"
+                       class="demo-btn"
+                       placeholder="Search..."
+                       @input="search($event.target.value)"
+                       style="flex: 1; max-width: 200px;">
+            </div>
+
+            <!-- Table -->
+            <div class="dd-table-enterprise">
+                <!-- Toolbar -->
+                <div class="dd-table-toolbar">
+                    <div class="dd-table-search">
+                        <svg class="dd-table-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path fill-rule="evenodd" d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
+                        </svg>
+                        <input type="text" placeholder="Search findings..." @input="search($event.target.value)">
+                    </div>
+                </div>
+
+                <!-- Fixed Header Table -->
+                <table class="dd-table dd-table-header-fixed" x-ref="headerTable">
+                    <thead class="dd-table-header">
+                        <tr>
+                            <th class="dd-table-checkbox">
+                                <input type="checkbox"
+                                       :checked="selectAll"
+                                       @change="toggleSelectAll()"
+                                       aria-label="Select all">
+                            </th>
+                            <th style="width: 40px;"></th>
+                            <template x-for="col in columns" :key="col.key">
+                                <th class="sortable"
+                                    :class="{ 'sorted': sortColumn === col.key }"
+                                    @click="sort(col.key)"
+                                    :aria-sort="sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                    <span x-text="col.label"></span>
+                                    <span class="dd-sort-icon">
+                                        <template x-if="sortColumn !== col.key">
+                                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M8 1l4 5H4l4-5zm0 14l-4-5h8l-4 5z"/>
+                                            </svg>
+                                        </template>
+                                        <template x-if="sortColumn === col.key && sortDirection === 'asc'">
+                                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M8 1l4 5H4l4-5z"/>
+                                            </svg>
+                                        </template>
+                                        <template x-if="sortColumn === col.key && sortDirection === 'desc'">
+                                            <svg viewBox="0 0 16 16" fill="currentColor">
+                                                <path d="M8 15l-4-5h8l-4 5z"/>
+                                            </svg>
+                                        </template>
+                                    </span>
+                                </th>
+                            </template>
+                        </tr>
+                    </thead>
+                </table>
+
+                <!-- Scrollable Body Container -->
+                <div class="dd-table-scroll-container"
+                     x-ref="tableContainer"
+                     @scroll="handleScroll($event)"
+                     style="height: 500px;"
+                     @keydown="handleKeydown($event)"
+                     tabindex="0"
+                     role="grid"
+                     aria-label="Findings table">
+
+                    <!-- Virtual Scrolling Spacer -->
+                    <div class="dd-table-virtual-spacer" :style="{ height: totalHeight + 'px' }">
+                        <div class="dd-table-virtual-content" :style="{ transform: 'translateY(' + offsetY + 'px)' }">
+                            <table class="dd-table dd-table-body-only" x-ref="bodyTable">
+                                <tbody class="dd-table-body">
+                                    <template x-for="(row, index) in visibleData" :key="row.id">
+                                        <tr class="dd-table-row"
+                                            :class="{
+                                                'selected': isSelected(row.id),
+                                                'expanded': isExpanded(row.id),
+                                                'focused': focusedRowIndex === startIndex + index
+                                            }"
+                                            @click="toggleSelect(row.id)">
+
+                                            <!-- Checkbox -->
+                                            <td class="dd-table-cell dd-table-checkbox" @click.stop>
+                                                <input type="checkbox"
+                                                       :checked="isSelected(row.id)"
+                                                       @change="toggleSelect(row.id)"
+                                                       :aria-label="'Select finding ' + row.id">
+                                            </td>
+
+                                            <!-- Expand Toggle -->
+                                            <td class="dd-table-cell" @click.stop>
+                                                <button class="dd-expand-toggle"
+                                                        :class="{ 'expanded': isExpanded(row.id) }"
+                                                        @click="toggleExpand(row.id)"
+                                                        :aria-expanded="isExpanded(row.id)"
+                                                        aria-label="Toggle row details">
+                                                    <svg viewBox="0 0 16 16" fill="currentColor">
+                                                        <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                                                    </svg>
+                                                </button>
+                                            </td>
+
+                                            <!-- Data Cells -->
+                                            <template x-for="col in columns" :key="col.key">
+                                                <td class="dd-table-cell"
+                                                    :class="{
+                                                        'monospace': ['id', 'cwe', 'cve'].includes(col.key),
+                                                        'truncate': col.key === 'title'
+                                                    }"
+                                                    :title="row[col.key]">
+                                                    <!-- Severity Badge -->
+                                                    <template x-if="col.key === 'severity'">
+                                                        <span class="dd-severity-badge"
+                                                              :class="row.severity.toLowerCase()"
+                                                              x-text="row.severity"></span>
+                                                    </template>
+
+                                                    <!-- Status Badge -->
+                                                    <template x-if="col.key === 'status'">
+                                                        <span class="dd-status-badge"
+                                                              :class="{
+                                                                  'active': row.status === 'Active',
+                                                                  'verified': row.status === 'Verified',
+                                                                  'inactive': ['Mitigated', 'False Positive'].includes(row.status)
+                                                              }"
+                                                              x-text="row.status"></span>
+                                                    </template>
+
+                                                    <!-- Default Cell -->
+                                                    <template x-if="!['severity', 'status'].includes(col.key)">
+                                                        <span x-text="row[col.key]"></span>
+                                                    </template>
+                                                </td>
+                                            </template>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk Actions Bar -->
+                <div class="dd-bulk-actions" :class="{ 'visible': showBulkActions }">
+                    <span class="dd-bulk-actions-count">
+                        <strong x-text="selected.length"></strong> items selected
+                    </span>
+                    <button class="dd-bulk-action-btn" @click="submitBulkAction('verify')">
+                        Verify
+                    </button>
+                    <button class="dd-bulk-action-btn" @click="submitBulkAction('close')">
+                        Close
+                    </button>
+                    <button class="dd-bulk-action-btn danger" @click="submitBulkAction('delete')">
+                        Delete
+                    </button>
+                    <button class="dd-bulk-action-btn" @click="clearSelection()">
+                        Cancel
+                    </button>
+                </div>
+
+                <!-- Pagination Info -->
+                <div class="dd-table-pagination">
+                    <div class="dd-pagination-info">
+                        Showing <span x-text="startIndex + 1"></span>-<span x-text="Math.min(endIndex, filteredData.length)"></span>
+                        of <span x-text="filteredData.length"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

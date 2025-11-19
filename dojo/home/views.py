@@ -74,6 +74,11 @@ def support(request: HttpRequest) -> HttpResponse:
     return render(request, "dojo/support.html", {})
 
 
+def datatable_demo(request: HttpRequest) -> HttpResponse:
+    """Demo page for the enterprise data table component."""
+    return render(request, "dojo/datatable_demo.html", {})
+
+
 def get_severities_all(findings) -> dict[str, int]:
     severities_all = findings.values("severity").annotate(count=Count("severity")).order_by()
     return defaultdict(lambda: 0, {s["severity"]: s["count"] for s in severities_all})
