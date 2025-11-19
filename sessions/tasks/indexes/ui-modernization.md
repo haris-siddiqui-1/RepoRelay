@@ -9,11 +9,14 @@ description: Tasks related to modernizing DefectDojo's frontend UI using Tailwin
 ## Active Tasks
 
 ### High Priority
-- `h-implement-enterprise-dashboard-design/` - Enterprise-grade dashboard redesign with sophisticated UI patterns, dark-mode-first design, and cutting-edge 2024-2025 SaaS aesthetics
-- `h-ui-modernization.md` - Original UI modernization planning and roadmap
+- `h-ui-modernization.md` - Original UI modernization planning and roadmap (master plan)
 
 ### Medium Priority
-<!-- No medium priority tasks currently -->
+- `m-github-activity-dashboard.md` - GitHub-specific visualizations (repo activity, webhooks, contributor graphs)
+- `m-data-tables-component.md` - Enterprise data tables with virtual scrolling and sticky headers
+
+### Foundation Complete
+- `h-implement-enterprise-dashboard-design/` - Dashboard foundation complete (dark-mode-first, command palette, sidebar)
 
 ### Low Priority
 <!-- No low priority tasks currently -->
