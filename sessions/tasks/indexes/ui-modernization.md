@@ -10,6 +10,7 @@ description: Tasks related to modernizing DefectDojo's frontend UI using Tailwin
 
 ### High Priority
 - `h-ui-modernization.md` - Original UI modernization planning and roadmap (master plan)
+- `h-implement-core-pages-modern-ui.md` - Implement modern templates for Findings, Products, Engagements, Tests pages
 
 ### Medium Priority
 - `m-github-activity-dashboard.md` - GitHub-specific visualizations (repo activity, webhooks, contributor graphs)
@@ -26,3 +27,4 @@ description: Tasks related to modernizing DefectDojo's frontend UI using Tailwin
 
 ## Completed Tasks
 - `h-dashboard-refined-redesign.md` - Enterprise dark-mode-first dashboard implementation with command palette, collapsible sidebar, and Chart.js visualizations
+- `h-fix-modern-ui-routing.md` - Fixed dashboard URL routing to use modern template by default (2025-01-20)
