@@ -52,7 +52,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         unassigned_surveys = None
 
     add_breadcrumb(request=request, clear=True)
-    return render(request, "dojo/dashboard.html", {
+    return render(request, "dojo/dashboard_modern.html", {
         "engagement_count": engagement_count,
         "finding_count": finding_count,
         "mitigated_count": mitigated_count,

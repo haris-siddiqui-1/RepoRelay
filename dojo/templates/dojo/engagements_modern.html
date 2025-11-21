@@ -1,0 +1,315 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+{% load display_tags %}
+
+{% block add_styles %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'dojo/css/components/dataTable.css' %}">
+<style>
+    .engagements-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .filter-card {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 200ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Engagements List Header -->
+<div class="mb-12 engagements-header">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                {{ view }} {% trans "Engagements" %}
+            </h1>
+            <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">
+                {% trans "Security testing activities and assessments" %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <!-- Export Dropdown -->
+            <div x-data="{ exportOpen: false }" class="relative">
+                <button @click="exportOpen = !exportOpen"
+                        class="px-5 py-2.5 bg-enterprise-card border border-enterprise-border rounded-lg text-enterprise-text-primary font-medium text-sm hover:border-accent-500 transition-colors duration-200 inline-flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    {% trans "Export" %}
+                    <svg class="w-4 h-4 ml-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
+                </button>
+                <div x-show="exportOpen"
+                     @click.away="exportOpen = false"
+                     x-transition
+                     class="absolute right-0 mt-2 w-48 bg-enterprise-card border border-enterprise-border rounded-lg shadow-xl z-50">
+                    <a href="{% url 'engagement_csv_export' %}?url={{ request.get_full_path }}"
+                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary rounded-t-lg">
+                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clip-rule="evenodd"/>
+                        </svg>
+                        {% trans "CSV Export" %}
+                    </a>
+                    <a href="{% url 'engagement_excel_export' %}?url={{ request.get_full_path }}"
+                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary rounded-b-lg">
+                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm2 10a1 1 0 10-2 0v3a1 1 0 102 0v-3zm2-3a1 1 0 011 1v5a1 1 0 11-2 0v-5a1 1 0 011-1zm4-1a1 1 0 10-2 0v7a1 1 0 102 0V8z" clip-rule="evenodd"/>
+                        </svg>
+                        {% trans "Excel Export" %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Engagements Table with Alpine.js Data Table Component -->
+<script id="engagements-data" type="application/json">
+{{ engagements_json|safe }}
+</script>
+<div class="enterprise-card rounded-lg p-8 filter-card">
+    <div x-data="dataTable({
+        data: JSON.parse(document.getElementById('engagements-data').textContent),
+        columns: [
+            { key: 'id', label: 'ID', sortType: 'number' },
+            { key: 'name', label: 'Engagement', sortType: 'string' },
+            { key: 'target_start', label: 'Start Date', sortType: 'date' },
+            { key: 'target_end', label: 'End Date', sortType: 'date' },
+            { key: 'status', label: 'Status', sortType: 'string' },
+            { key: 'product_name', label: '{{ labels.ASSET_LABEL }}', sortType: 'string' },
+            { key: 'product_type', label: '{{ labels.ORG_LABEL }}', sortType: 'string' },
+            { key: 'lead_name', label: 'Lead', sortType: 'string' },
+            { key: 'test_count', label: 'Tests', sortType: 'number' }
+        ],
+        csrfToken: '{{ csrf_token }}',
+        bulkActionUrl: '#'
+    })">
+        <!-- Toolbar with search and filters -->
+        <div class="mb-6 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="dd-table-search">
+                    <svg class="dd-table-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
+                    </svg>
+                    <input type="text" placeholder="{% trans 'Search engagements...' %}" @input="search($event.target.value)">
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-enterprise-text-secondary">
+                    <span x-text="filteredData.length"></span> {% trans "engagements" %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="dd-table-enterprise">
+            <!-- Fixed Header Table -->
+            <table class="dd-table dd-table-header-fixed" x-ref="headerTable">
+                <thead class="dd-table-header">
+                    <tr>
+                        <th class="dd-table-checkbox">
+                            <input type="checkbox"
+                                   :checked="selectAll"
+                                   @change="toggleSelectAll()"
+                                   aria-label="{% trans 'Select all' %}">
+                        </th>
+                        <th style="width: 40px;"></th>
+                        <template x-for="col in columns" :key="col.key">
+                            <th class="sortable"
+                                :class="{ 'sorted': sortColumn === col.key }"
+                                @click="sort(col.key)"
+                                :aria-sort="sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <span x-text="col.label"></span>
+                                <span class="dd-sort-icon">
+                                    <template x-if="sortColumn !== col.key">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 1l4 5H4l4-5zm0 14l-4-5h8l-4 5z"/>
+                                        </svg>
+                                    </template>
+                                    <template x-if="sortColumn === col.key && sortDirection === 'asc'">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 1l4 5H4l4-5z"/>
+                                        </svg>
+                                    </template>
+                                    <template x-if="sortColumn === col.key && sortDirection === 'desc'">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 15l-4-5h8l-4 5z"/>
+                                        </svg>
+                                    </template>
+                                </span>
+                            </th>
+                        </template>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+            </table>
+
+            <!-- Scrollable Body Container with Virtual Scrolling -->
+            <div class="dd-table-scroll-container"
+                 x-ref="tableContainer"
+                 @scroll="handleScroll($event)"
+                 style="height: 600px;"
+                 @keydown="handleKeydown($event)"
+                 tabindex="0"
+                 role="grid"
+                 aria-label="{% trans 'Engagements table' %}">
+
+                <!-- Virtual Scrolling Spacer -->
+                <div class="dd-table-virtual-spacer" :style="{ height: totalHeight + 'px' }">
+                    <div class="dd-table-virtual-content" :style="{ transform: 'translateY(' + offsetY + 'px)' }">
+                        <table class="dd-table dd-table-body-only" x-ref="bodyTable">
+                            <tbody class="dd-table-body">
+                                <template x-for="(row, index) in visibleData" :key="row.id">
+                                    <tr class="dd-table-row"
+                                        :class="{
+                                            'selected': isSelected(row.id),
+                                            'expanded': isExpanded(row.id),
+                                            'focused': focusedRowIndex === startIndex + index
+                                        }">
+
+                                        <!-- Checkbox -->
+                                        <td class="dd-table-cell dd-table-checkbox" @click.stop>
+                                            <input type="checkbox"
+                                                   :checked="isSelected(row.id)"
+                                                   @change="toggleSelect(row.id)"
+                                                   :aria-label="'Select engagement ' + row.id">
+                                        </td>
+
+                                        <!-- Expand Toggle -->
+                                        <td class="dd-table-cell" @click.stop>
+                                            <button class="dd-expand-toggle"
+                                                    :class="{ 'expanded': isExpanded(row.id) }"
+                                                    @click="toggleExpand(row.id)"
+                                                    :aria-expanded="isExpanded(row.id)"
+                                                    aria-label="{% trans 'Toggle row details' %}">
+                                                <svg viewBox="0 0 16 16" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                                                </svg>
+                                            </button>
+                                        </td>
+
+                                        <!-- Data Cells -->
+                                        <template x-for="col in columns" :key="col.key">
+                                            <td class="dd-table-cell"
+                                                :class="{
+                                                    'monospace': ['id'].includes(col.key),
+                                                    'truncate': ['name', 'product_name'].includes(col.key)
+                                                }"
+                                                :title="row[col.key]"
+                                                @click="if (col.key === 'name') window.location.href = '/engagement/' + row.id">
+
+                                                <!-- Status Badge -->
+                                                <template x-if="col.key === 'status'">
+                                                    <span class="dd-status-badge"
+                                                          :class="{
+                                                              'active': row.status === 'In Progress',
+                                                              'inactive': row.status !== 'In Progress'
+                                                          }"
+                                                          x-text="row.status"></span>
+                                                </template>
+
+                                                <!-- Default Cell -->
+                                                <template x-if="col.key !== 'status'">
+                                                    <span x-text="row[col.key]"></span>
+                                                </template>
+                                            </td>
+                                        </template>
+
+                                        <!-- Actions Column -->
+                                        <td class="dd-table-cell">
+                                            <div x-data="{ actionsOpen: false }" class="relative">
+                                                <button @click.stop="actionsOpen = !actionsOpen"
+                                                        class="text-enterprise-text-secondary hover:text-accent-400 transition-colors">
+                                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"/>
+                                                    </svg>
+                                                </button>
+                                                <div x-show="actionsOpen"
+                                                     @click.away="actionsOpen = false"
+                                                     x-transition
+                                                     class="absolute right-0 mt-2 w-48 bg-enterprise-card border border-enterprise-border rounded-lg shadow-xl z-50">
+                                                    <a :href="'/engagement/' + row.id"
+                                                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary">
+                                                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                                                            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                        {% trans "View" %}
+                                                    </a>
+                                                    <a :href="'/engagement/' + row.id + '/edit'"
+                                                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary">
+                                                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                                                        </svg>
+                                                        {% trans "Edit" %}
+                                                    </a>
+                                                    <a :href="'/engagement/' + row.id + '/add_tests'"
+                                                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary">
+                                                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                        {% trans "Add Tests" %}
+                                                    </a>
+                                                    <a :href="'/import-scan-results/' + row.id"
+                                                       class="block px-4 py-2 text-sm text-enterprise-text-primary hover:bg-enterprise-bg-secondary">
+                                                        <svg class="w-4 h-4 inline-block mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                                        </svg>
+                                                        {% trans "Import Scan" %}
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pagination Info -->
+            <div class="dd-table-pagination">
+                <div class="dd-pagination-info">
+                    {% trans "Showing" %} <span x-text="startIndex + 1"></span>-<span x-text="Math.min(endIndex, filteredData.length)"></span>
+                    {% trans "of" %} <span x-text="filteredData.length"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script src="{% static 'dojo/js/alpine/components/dataTable.js' %}"></script>
+{% endblock %}

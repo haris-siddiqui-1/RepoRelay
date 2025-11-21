@@ -17,8 +17,7 @@
  * </div>
  */
 
-document.addEventListener('alpine:init', () => {
-    Alpine.data('dataTable', (config = {}) => ({
+export default (config = {}) => ({
         // ============================================
         // STATE
         // ============================================
@@ -495,5 +494,4 @@ document.addEventListener('alpine:init', () => {
                 selected: this.selected.length
             };
         }
-    }));
 });

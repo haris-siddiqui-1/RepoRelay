@@ -1,0 +1,400 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+{% load display_tags %}
+
+{% block add_styles %}
+{{ block.super }}
+<style>
+    .finding-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .card-grid {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 150ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .severity-badge-large {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .severity-critical {
+        background: rgba(239, 68, 68, 0.1);
+        color: #EF4444;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .severity-high {
+        background: rgba(251, 146, 60, 0.1);
+        color: #FB923C;
+        border: 1px solid rgba(251, 146, 60, 0.3);
+    }
+
+    .severity-medium {
+        background: rgba(139, 92, 246, 0.1);
+        color: #8B5CF6;
+        border: 1px solid rgba(139, 92, 246, 0.3);
+    }
+
+    .severity-low {
+        background: rgba(125, 133, 144, 0.1);
+        color: #7D8590;
+        border: 1px solid rgba(125, 133, 144, 0.3);
+    }
+
+    .severity-info {
+        background: rgba(125, 133, 144, 0.05);
+        color: #7D8590;
+        border: 1px solid rgba(125, 133, 144, 0.2);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-weight: 500;
+        font-size: 13px;
+    }
+
+    .status-active {
+        background: rgba(239, 68, 68, 0.1);
+        color: #EF4444;
+    }
+
+    .status-verified {
+        background: rgba(34, 197, 94, 0.1);
+        color: #22C55E;
+    }
+
+    .status-mitigated {
+        background: rgba(125, 133, 144, 0.1);
+        color: #7D8590;
+    }
+
+    .field-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: #7d8590;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+    }
+
+    .field-value {
+        font-size: 14px;
+        color: #e6edf3;
+        line-height: 1.6;
+    }
+
+    .code-block {
+        background: #0d1117;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        color: #e6edf3;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Finding Header -->
+<div class="mb-12 finding-header">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <div class="mb-4">
+                <a href="{% url 'all_findings' %}"
+                   class="text-accent-400 hover:text-accent-300 text-sm font-medium inline-flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    {% trans "Back to Findings" %}
+                </a>
+            </div>
+            <h1 class="font-sans text-5xl font-bold leading-tight text-enterprise-text-primary tracking-tight mb-4">
+                {{ finding.title }}
+            </h1>
+            <div class="flex items-center space-x-4">
+                <span class="severity-badge-large severity-{{ finding.severity|lower }}">
+                    {{ finding.severity }}
+                </span>
+                {% if finding.active %}
+                <span class="status-badge status-active">{% trans "Active" %}</span>
+                {% else %}
+                <span class="status-badge status-mitigated">{% trans "Inactive" %}</span>
+                {% endif %}
+                {% if finding.verified %}
+                <span class="status-badge status-verified">{% trans "Verified" %}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if user_has_permission_edit %}
+            <a href="{% url 'edit_finding' finding.id %}"
+               class="px-5 py-2.5 bg-enterprise-card border border-enterprise-border rounded-lg text-enterprise-text-primary font-medium text-sm hover:border-accent-500 transition-colors duration-200">
+                {% trans "Edit" %}
+            </a>
+            {% endif %}
+            {% if user_has_permission_delete %}
+            <a href="{% url 'delete_finding' finding.id %}"
+               class="px-5 py-2.5 bg-error/10 border border-error/30 rounded-lg text-error font-medium text-sm hover:bg-error/20 transition-colors duration-200">
+                {% trans "Delete" %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 card-grid">
+    <!-- Left Column - Primary Details -->
+    <div class="lg:col-span-2 space-y-8">
+        <!-- Description Card -->
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Description" %}</h2>
+            <div class="field-value prose prose-invert max-w-none">
+                {{ finding.description|safe }}
+            </div>
+        </div>
+
+        <!-- Mitigation Card -->
+        {% if finding.mitigation %}
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Mitigation" %}</h2>
+            <div class="field-value prose prose-invert max-w-none">
+                {{ finding.mitigation|safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Impact Card -->
+        {% if finding.impact %}
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Impact" %}</h2>
+            <div class="field-value prose prose-invert max-w-none">
+                {{ finding.impact|safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Steps to Reproduce -->
+        {% if finding.steps_to_reproduce %}
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Steps to Reproduce" %}</h2>
+            <div class="field-value prose prose-invert max-w-none">
+                {{ finding.steps_to_reproduce|safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- References -->
+        {% if finding.references %}
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "References" %}</h2>
+            <div class="field-value prose prose-invert max-w-none">
+                {{ finding.references|safe }}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Endpoints -->
+        {% if endpoints %}
+        <div class="enterprise-card rounded-lg p-8">
+            <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Endpoints" %}</h2>
+            <div class="space-y-3">
+                {% for endpoint in endpoints %}
+                <div class="flex items-center p-3 bg-enterprise-bg-secondary rounded-lg">
+                    <code class="font-mono text-sm text-accent-400">{{ endpoint }}</code>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Right Column - Metadata & Actions -->
+    <div class="space-y-8">
+        <!-- Quick Info Card -->
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-6">{% trans "Details" %}</h3>
+            <div class="space-y-5">
+                <div>
+                    <div class="field-label">{% trans "ID" %}</div>
+                    <div class="field-value font-mono">#{{ finding.id }}</div>
+                </div>
+
+                {% if finding.cwe %}
+                <div>
+                    <div class="field-label">{% trans "CWE" %}</div>
+                    <div class="field-value font-mono">{{ finding.cwe }}</div>
+                </div>
+                {% endif %}
+
+                {% if finding.cve %}
+                <div>
+                    <div class="field-label">{% trans "CVE" %}</div>
+                    <div class="field-value font-mono">{{ finding.cve }}</div>
+                </div>
+                {% endif %}
+
+                <div>
+                    <div class="field-label">{% trans "Date Found" %}</div>
+                    <div class="field-value">{{ finding.date|date:"Y-m-d" }}</div>
+                </div>
+
+                {% if finding.mitigated %}
+                <div>
+                    <div class="field-label">{% trans "Mitigated" %}</div>
+                    <div class="field-value">{{ finding.mitigated|date:"Y-m-d" }}</div>
+                </div>
+                {% endif %}
+
+                <div>
+                    <div class="field-label">{% trans "Product" %}</div>
+                    <div class="field-value">
+                        <a href="{% url 'view_product' finding.test.engagement.product.id %}"
+                           class="text-accent-400 hover:text-accent-300">
+                            {{ finding.test.engagement.product.name }}
+                        </a>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="field-label">{% trans "Engagement" %}</div>
+                    <div class="field-value">
+                        <a href="{% url 'view_engagement' finding.test.engagement.id %}"
+                           class="text-accent-400 hover:text-accent-300">
+                            {{ finding.test.engagement.name }}
+                        </a>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="field-label">{% trans "Test" %}</div>
+                    <div class="field-value">
+                        <a href="{% url 'view_test' finding.test.id %}"
+                           class="text-accent-400 hover:text-accent-300">
+                            {{ finding.test.title }}
+                        </a>
+                    </div>
+                </div>
+
+                {% if finding.reporter %}
+                <div>
+                    <div class="field-label">{% trans "Reporter" %}</div>
+                    <div class="field-value">{{ finding.reporter }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- CVSS Score Card -->
+        {% if finding.cvssv3 %}
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-4">{% trans "CVSS v3" %}</h3>
+            <div class="text-4xl font-bold text-accent-400 mb-2">{{ finding.cvssv3_score }}</div>
+            <div class="text-sm text-enterprise-text-secondary font-mono">{{ finding.cvssv3 }}</div>
+        </div>
+        {% endif %}
+
+        <!-- Tags Card -->
+        {% if finding.tags.all %}
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-4">{% trans "Tags" %}</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for tag in finding.tags.all %}
+                <span class="px-3 py-1.5 bg-accent-500/10 text-accent-400 rounded-md text-sm font-medium border border-accent-500/20">
+                    {{ tag }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Files Card -->
+        {% if files %}
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-4">{% trans "Files" %}</h3>
+            <div class="space-y-2">
+                {% for file in files %}
+                <a href="{{ file.file.url }}"
+                   class="flex items-center p-3 bg-enterprise-bg-secondary rounded-lg hover:bg-enterprise-bg-tertiary transition-colors">
+                    <svg class="w-5 h-5 mr-2 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span class="text-sm text-enterprise-text-primary truncate">{{ file.title }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Notes Section (Full Width) -->
+{% if notes %}
+<div class="mt-8 enterprise-card rounded-lg p-8 card-grid">
+    <h2 class="font-sans text-xl font-bold text-enterprise-text-primary mb-6">{% trans "Notes" %}</h2>
+    <div class="space-y-4">
+        {% for note in notes %}
+        <div class="p-6 bg-enterprise-bg-secondary rounded-lg">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 bg-accent-500/20 rounded-full flex items-center justify-center">
+                        <span class="text-accent-400 font-medium text-sm">{{ note.author.get_full_name.0|upper }}</span>
+                    </div>
+                    <div>
+                        <div class="font-medium text-enterprise-text-primary">{{ note.author.get_full_name }}</div>
+                        <div class="text-xs text-enterprise-text-secondary">{{ note.date|date:"Y-m-d H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="field-value">{{ note.entry }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+{% endblock %}

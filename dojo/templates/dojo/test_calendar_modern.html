@@ -1,0 +1,347 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+
+{% block add_styles %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css">
+<style>
+    .calendar-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .calendar-card {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 150ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* FullCalendar Modern Dark Theme */
+    #calendar {
+        background: #0f1419;
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .fc {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .fc .fc-button {
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e6edf3;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-weight: 500;
+        text-transform: capitalize;
+        transition: all 200ms ease;
+    }
+
+    .fc .fc-button:hover {
+        background: #8B5CF6;
+        border-color: #8B5CF6;
+        color: white;
+    }
+
+    .fc .fc-button-primary:not(:disabled).fc-button-active {
+        background: #8B5CF6;
+        border-color: #8B5CF6;
+        color: white;
+    }
+
+    .fc .fc-button-primary:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .fc .fc-toolbar-title {
+        color: #e6edf3;
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    .fc .fc-col-header-cell {
+        background: #1c2128;
+        border-color: rgba(255, 255, 255, 0.1);
+        padding: 12px 0;
+    }
+
+    .fc .fc-col-header-cell-cushion {
+        color: #7d8590;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 11px;
+        letter-spacing: 0.05em;
+    }
+
+    .fc .fc-daygrid-day {
+        background: #0f1419;
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .fc .fc-daygrid-day.fc-day-today {
+        background: rgba(139, 92, 246, 0.05);
+    }
+
+    .fc .fc-daygrid-day-number {
+        color: #e6edf3;
+        padding: 8px;
+        font-weight: 500;
+    }
+
+    .fc .fc-event {
+        border-radius: 4px;
+        border: none;
+        padding: 4px 8px;
+        margin: 2px 0;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 150ms ease;
+    }
+
+    .fc .fc-event:hover {
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+        transform: translateY(-1px);
+    }
+
+    .fc .fc-event-title {
+        color: white;
+        font-weight: 500;
+    }
+
+    .fc .fc-daygrid-event-dot {
+        border-color: white;
+    }
+
+    .fc .fc-more-link {
+        color: #8B5CF6;
+        font-weight: 600;
+    }
+
+    .fc .fc-more-link:hover {
+        color: #7C3AED;
+    }
+
+    .fc-h-event {
+        background: #8B5CF6;
+        border-color: #8B5CF6;
+    }
+
+    .fc-h-event.fc-event-inactive {
+        background: #7d8590;
+        border-color: #7d8590;
+        opacity: 0.6;
+    }
+
+    /* Filter Section */
+    .filter-section {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .filter-select {
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e6edf3;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        min-width: 200px;
+        transition: all 200ms ease;
+    }
+
+    .filter-select:focus {
+        outline: none;
+        border-color: #8B5CF6;
+        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.1);
+    }
+
+    .filter-select option {
+        background: #1c2128;
+        color: #e6edf3;
+    }
+
+    .apply-btn {
+        background: #8B5CF6;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 24px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 200ms ease;
+    }
+
+    .apply-btn:hover {
+        background: #7C3AED;
+        box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Calendar Header -->
+<div class="mb-12 calendar-header">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                {% trans "Test Calendar" %}
+            </h1>
+            <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">
+                {% trans "Schedule and timeline for security testing activities" %}
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="enterprise-card rounded-lg p-6 mb-8 calendar-card">
+    <form method="GET" action="/calendar/tests" class="filter-section">
+        <div>
+            <label class="block text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">
+                {% trans "Calendar Type" %}
+            </label>
+            <select id="caltype" class="filter-select">
+                <option value="engagements">{% trans "Engagements" %}</option>
+                <option value="tests" selected>{% trans "Tests" %}</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">
+                {% trans "Filter by Lead" %}
+            </label>
+            <select multiple id="lead" name="lead" class="filter-select">
+                <option value="0">{% trans "All users" %}</option>
+                <option value="-1">{% trans "Unassigned" %}</option>
+                {% for u in users %}
+                    <option value="{{ u.id }}">{{ u.username }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="self-end">
+            <button type="submit" class="apply-btn">
+                <svg class="w-4 h-4 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                {% trans "Apply Filter" %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Calendar Card -->
+<div class="enterprise-card rounded-lg p-8 calendar-card">
+    <div id="calendar"></div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Calendar type switcher
+    const caltypeSelect = document.getElementById('caltype');
+    caltypeSelect.addEventListener('change', function() {
+        window.location.href = '/calendar/' + this.value;
+    });
+
+    // Set selected leads
+    const leadSelect = document.getElementById('lead');
+    const selectedLeads = [{% for lead in leads %}'{{ lead }}',{% endfor %}];
+    Array.from(leadSelect.options).forEach(option => {
+        if (selectedLeads.includes(option.value)) {
+            option.selected = true;
+        }
+    });
+
+    // Initialize FullCalendar
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,dayGridWeek,dayGridDay'
+        },
+        editable: false,
+        eventLimit: true,
+        height: 'auto',
+        events: [
+            {% if caltype == 'tests' %}
+                {% for t in tests %}
+                {
+                    title: '{{ t.engagement.product.name }}: {{ t.engagement.name|default:"Unknown" }} - {{ t.test_type }} ({{ t.lead|default:"Unassigned" }})',
+                    start: '{{ t.target_start|date:"c" }}',
+                    end: '{{ t.target_end|date:"c" }}',
+                    url: '{% url "view_test" t.id %}',
+                    backgroundColor: {% if t.engagement.active %}'#8B5CF6'{% else %}'#7d8590'{% endif %},
+                    borderColor: {% if t.engagement.active %}'#8B5CF6'{% else %}'#7d8590'{% endif %},
+                    classNames: {% if not t.engagement.active %}['fc-event-inactive']{% else %}[]{% endif %}
+                },
+                {% endfor %}
+            {% else %}
+                {% for e in engagements %}
+                {
+                    title: '{{ e.product.name }}: {{ e.name|default:"Unknown" }} ({{ e.lead|default:"Unassigned" }})',
+                    start: '{{ e.target_start|date:"c" }}',
+                    end: '{{ e.target_end|date:"c" }}',
+                    url: '{% url "view_engagement" e.id %}',
+                    backgroundColor: {% if e.active %}'#8B5CF6'{% else %}'#7d8590'{% endif %},
+                    borderColor: {% if e.active %}'#8B5CF6'{% else %}'#7d8590'{% endif %},
+                    classNames: {% if not e.active %}['fc-event-inactive']{% else %}[]{% endif %}
+                },
+                {% endfor %}
+            {% endif %}
+        ],
+        eventClick: function(info) {
+            info.jsEvent.preventDefault();
+            if (info.event.url) {
+                window.location.href = info.event.url;
+            }
+        },
+        eventMouseEnter: function(info) {
+            info.el.style.transform = 'translateY(-2px)';
+        },
+        eventMouseLeave: function(info) {
+            info.el.style.transform = 'translateY(0)';
+        }
+    });
+
+    calendar.render();
+});
+</script>
+{% endblock %}

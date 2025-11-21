@@ -11,6 +11,7 @@ import darkMode from './alpine/components/darkMode.js';
 import dropdown from './alpine/components/dropdown.js';
 import modal from './alpine/components/modal.js';
 import toast from './alpine/components/toast.js';
+import dataTable from './alpine/components/dataTable.js';
 
 // Import chart utilities
 import { initializeCharts } from './charts/index.js';
@@ -23,6 +24,7 @@ Alpine.data('darkMode', darkMode);
 Alpine.data('dropdown', dropdown);
 Alpine.data('modal', modal);
 Alpine.data('toast', toast);
+Alpine.data('dataTable', dataTable);
 
 // Make utility functions globally available
 window.dd = {

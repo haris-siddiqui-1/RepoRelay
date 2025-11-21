@@ -1,0 +1,328 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+{% load display_tags %}
+
+{% block add_styles %}
+{{ block.super }}
+<style>
+    .product-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .metrics-grid {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 150ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .metric-card {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .metric-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #8B5CF6, #7C3AED);
+        opacity: 0;
+        transition: opacity 200ms ease;
+    }
+
+    .metric-card:hover::before {
+        opacity: 1;
+    }
+
+    .chart-container {
+        height: 300px;
+        position: relative;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Product Header -->
+<div class="mb-12 product-header">
+    <div class="flex items-start justify-between">
+        <div class="flex-1">
+            <div class="mb-4">
+                <a href="{% url 'product' %}"
+                   class="text-accent-400 hover:text-accent-300 text-sm font-medium inline-flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    {% trans "Back to Products" %}
+                </a>
+            </div>
+            <h1 class="font-sans text-5xl font-bold leading-tight text-enterprise-text-primary tracking-tight mb-4">
+                {{ prod.name }}
+            </h1>
+            {% if prod.description %}
+            <p class="font-sans text-base font-light text-enterprise-text-secondary tracking-wide max-w-3xl">
+                {{ prod.description }}
+            </p>
+            {% endif %}
+        </div>
+        <div class="flex items-center space-x-3">
+            {% if user_has_permission_edit %}
+            <a href="{% url 'edit_product' prod.id %}"
+               class="px-5 py-2.5 bg-enterprise-card border border-enterprise-border rounded-lg text-enterprise-text-primary font-medium text-sm hover:border-accent-500 transition-colors duration-200">
+                {% trans "Edit" %}
+            </a>
+            {% endif %}
+            {% if user_has_permission_delete %}
+            <a href="{% url 'delete_product' prod.id %}"
+               class="px-5 py-2.5 bg-error/10 border border-error/30 rounded-lg text-error font-medium text-sm hover:bg-error/20 transition-colors duration-200">
+                {% trans "Delete" %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Severity Metrics Grid -->
+<div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-12 metrics-grid">
+    <div class="enterprise-card rounded-lg p-6 metric-card">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">{% trans "Critical" %}</div>
+        <div class="text-4xl font-bold text-error" style="text-shadow: 0 0 30px rgba(239, 68, 68, 0.2);">{{ critical|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6 metric-card">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">{% trans "High" %}</div>
+        <div class="text-4xl font-bold text-warning" style="text-shadow: 0 0 30px rgba(251, 146, 60, 0.2);">{{ high|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6 metric-card">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">{% trans "Medium" %}</div>
+        <div class="text-4xl font-bold text-accent-400">{{ medium|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6 metric-card">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">{% trans "Low" %}</div>
+        <div class="text-4xl font-bold text-enterprise-text-secondary">{{ low|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6 metric-card">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">{% trans "Info" %}</div>
+        <div class="text-4xl font-bold text-enterprise-text-secondary">{{ info|default:0 }}</div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <!-- Left Column - Charts and Engagements -->
+    <div class="lg:col-span-2 space-y-8">
+        <!-- Active Engagements Card -->
+        <div class="enterprise-card rounded-lg p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="font-sans text-xl font-bold text-enterprise-text-primary">{% trans "Active Engagements" %}</h2>
+                <a href="{% url 'view_engagements' prod.id %}"
+                   class="text-accent-400 hover:text-accent-300 text-sm font-medium inline-flex items-center">
+                    {% trans "View all" %}
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+            <div class="space-y-4">
+                {% for engagement in active_engagements|slice:":5" %}
+                <div class="p-4 bg-enterprise-bg-secondary rounded-lg hover:bg-enterprise-bg-tertiary transition-colors cursor-pointer"
+                     onclick="window.location.href='{% url 'view_engagement' engagement.id %}'">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="font-medium text-enterprise-text-primary mb-1">{{ engagement.name }}</div>
+                            <div class="text-sm text-enterprise-text-secondary">
+                                {{ engagement.target_start|date:"Y-m-d" }} - {{ engagement.target_end|date:"Y-m-d" }}
+                            </div>
+                        </div>
+                        <div class="text-sm text-accent-400 font-medium">
+                            {{ engagement.test_set.count }} {% trans "tests" %}
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-8 text-enterprise-text-secondary">
+                    {% trans "No active engagements" %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Findings Card -->
+        <div class="enterprise-card rounded-lg p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="font-sans text-xl font-bold text-enterprise-text-primary">{% trans "Recent Findings" %}</h2>
+                <a href="{% url 'all_findings' %}?product={{ prod.id }}"
+                   class="text-accent-400 hover:text-accent-300 text-sm font-medium inline-flex items-center">
+                    {% trans "View all" %}
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+            </div>
+            <div class="space-y-3">
+                {% for finding in recent_findings|slice:":10" %}
+                <div class="flex items-center p-3 bg-enterprise-bg-secondary rounded-lg hover:bg-enterprise-bg-tertiary transition-colors cursor-pointer"
+                     onclick="window.location.href='{% url 'view_finding' finding.id %}'">
+                    <span class="dd-severity-badge {{ finding.severity|lower }} mr-3">
+                        {{ finding.severity }}
+                    </span>
+                    <div class="flex-1 truncate text-sm text-enterprise-text-primary">
+                        {{ finding.title }}
+                    </div>
+                    <div class="text-xs text-enterprise-text-secondary">
+                        {{ finding.date|date:"Y-m-d" }}
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-8 text-enterprise-text-secondary">
+                    {% trans "No findings" %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column - Product Info & Metadata -->
+    <div class="space-y-8">
+        <!-- Product Info Card -->
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-6">{% trans "Product Information" %}</h3>
+            <div class="space-y-5">
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "ID" %}</div>
+                    <div class="text-sm text-enterprise-text-primary font-mono">#{{ prod.id }}</div>
+                </div>
+
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Product Type" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.prod_type.name }}</div>
+                </div>
+
+                {% if prod.business_criticality %}
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Business Criticality" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.get_business_criticality_display }}</div>
+                </div>
+                {% endif %}
+
+                {% if prod.platform %}
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Platform" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.get_platform_display }}</div>
+                </div>
+                {% endif %}
+
+                {% if prod.lifecycle %}
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Lifecycle" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.get_lifecycle_display }}</div>
+                </div>
+                {% endif %}
+
+                {% if prod.origin %}
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Origin" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.get_origin_display }}</div>
+                </div>
+                {% endif %}
+
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Created" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.created|date:"Y-m-d" }}</div>
+                </div>
+
+                <div>
+                    <div class="text-xs font-medium text-enterprise-text-secondary uppercase tracking-wider mb-2">{% trans "Updated" %}</div>
+                    <div class="text-sm text-enterprise-text-primary">{{ prod.updated|date:"Y-m-d H:i" }}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Card -->
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-6">{% trans "Statistics" %}</h3>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between py-3 border-b border-enterprise-border">
+                    <span class="text-sm text-enterprise-text-secondary">{% trans "Total Findings" %}</span>
+                    <span class="text-lg font-bold text-accent-400">{{ total|default:0 }}</span>
+                </div>
+                <div class="flex items-center justify-between py-3 border-b border-enterprise-border">
+                    <span class="text-sm text-enterprise-text-secondary">{% trans "Engagements" %}</span>
+                    <span class="text-lg font-bold text-accent-400">{{ prod.engagement_set.count|default:0 }}</span>
+                </div>
+                <div class="flex items-center justify-between py-3">
+                    <span class="text-sm text-enterprise-text-secondary">{% trans "Tests" %}</span>
+                    <span class="text-lg font-bold text-accent-400">{{ prod.test_set.count|default:0 }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tags Card -->
+        {% if prod.tags.all %}
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-4">{% trans "Tags" %}</h3>
+            <div class="flex flex-wrap gap-2">
+                {% for tag in prod.tags.all %}
+                <span class="px-3 py-1.5 bg-accent-500/10 text-accent-400 rounded-md text-sm font-medium border border-accent-500/20">
+                    {{ tag }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions Card -->
+        <div class="enterprise-card rounded-lg p-6">
+            <h3 class="font-sans text-lg font-bold text-enterprise-text-primary mb-4">{% trans "Quick Actions" %}</h3>
+            <div class="space-y-2">
+                {% if user_has_permission_new_engagement %}
+                <a href="{% url 'new_eng_for_app' prod.id %}"
+                   class="block w-full px-4 py-2.5 text-center bg-accent-500/10 border border-accent-500/30 rounded-lg text-accent-400 font-medium text-sm hover:bg-accent-500/20 transition-colors">
+                    {% trans "New Engagement" %}
+                </a>
+                {% endif %}
+                {% if user_has_permission_import_scan %}
+                <a href="{% url 'import_scan_results' %}?product={{ prod.id }}"
+                   class="block w-full px-4 py-2.5 text-center bg-enterprise-bg-secondary border border-enterprise-border rounded-lg text-enterprise-text-primary font-medium text-sm hover:bg-enterprise-bg-tertiary transition-colors">
+                    {% trans "Import Scan" %}
+                </a>
+                {% endif %}
+                <a href="{% url 'view_product' prod.id %}"
+                   class="block w-full px-4 py-2.5 text-center bg-enterprise-bg-secondary border border-enterprise-border rounded-lg text-enterprise-text-primary font-medium text-sm hover:bg-enterprise-bg-tertiary transition-colors">
+                    {% trans "View Metrics" %}
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
