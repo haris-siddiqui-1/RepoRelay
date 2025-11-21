@@ -177,6 +177,7 @@
         font-size: 14px;
         font-weight: 500;
         min-width: 200px;
+        max-height: 200px;
         transition: all 200ms ease;
     }
 
@@ -299,7 +300,8 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         editable: false,
         eventLimit: true,
-        height: 'auto',
+        height: 800,
+        contentHeight: 750,
         events: [
             {% if caltype == 'tests' %}
                 {% for t in tests %}
