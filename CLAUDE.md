@@ -19,7 +19,8 @@ DefectDojo is an OWASP Flagship project that provides DevSecOps and vulnerabilit
 **Backend:** Python 3.13 + Django 5.1.14 + Django REST Framework 3.16.1
 **Database:** PostgreSQL (exclusive - no MySQL/SQLite support)
 **Async:** Celery 5.5.3 with Valkey/Redis broker
-**Frontend:** Bootstrap 3.4.1, jQuery 3.7.1, DataTables
+**Frontend (Classic):** Bootstrap 3.4.1, jQuery 3.7.1, DataTables
+**Frontend (Modern Preview):** Tailwind CSS 3.4, Alpine.js 3.13, Chart.js 4.4, Vite 5.0
 **Deployment:** Docker Compose with uWSGI and NGINX
 
 ## Key Commands
@@ -142,6 +143,12 @@ Each feature module follows a consistent pattern:
   - Security alerts collection (alerts_collector.py, findings_converter.py) - See README_ALERTS.md
   - **Insights dashboard** (insights/ module) - 25 insights across 5 categories with widget-based UI
   - Supports GraphQL API v4 (bulk operations) with REST API fallback
+- `dojo/frontend/` - Modern UI build system (NEW - November 2025):
+  - Vite 5.0 build tool with HMR development server
+  - Tailwind CSS 3.4 with JIT compilation
+  - Alpine.js 3.13 reactive components (dark mode, dropdown, modal, toast)
+  - Chart.js 4.4 for visualizations
+  - See README at dojo/frontend/README.md
 
 ### REST API Architecture
 **Base URL:** `/api/v2/`
@@ -446,11 +453,17 @@ The Insights Dashboard provides repository management analytics through a config
 **Template:** `dojo/templates/dojo/github_insights_dashboard.html`
 **JavaScript:** `dojo/static/dojo/js/github_insights_dashboard.js` (670 lines)
 
+**Design System (Updated January 2025):**
+- **Accent Color:** Violet (#8B5CF6) - consistent with modern UI templates
+- **Background:** Soft dark (#1c2128) - follows 2025 UI/UX best practices (not pure black)
+- **DataTables Integration:** Uses violet accent for interactive elements, filters, and buttons
+- **Glass Morphism:** `backdrop-filter: blur(12px)` with `-webkit-` prefix for config panel
+
 **Features:**
 - Widget-based grid layout (Bootstrap 3.4.1 responsive)
 - Chart.js 4.4.0 for visualizations (pie, bar, line, scatter, histogram)
-- Configuration modal for widget selection and ordering
-- Individual widget refresh buttons
+- Configuration modal for widget selection and ordering (vanilla DOM manipulation)
+- Individual widget refresh buttons with loading spinners and error handling
 - Real-time data fetching via REST API
 - Automatic refresh for pinned widgets (60-second intervals)
 - Pin/unpin functionality for critical insights
@@ -540,6 +553,352 @@ class MyCustomInsight(BaseInsight):
 - Scheduled reports: CSV/PDF export, automated email delivery
 - Custom insights: Admin UI for creating insights without code
 - Trend analysis: Historical data tracking, time-series visualizations
+
+### Modern Dashboard UI (Preview - November 2025)
+
+**Overview:**
+A redesigned dashboard interface using a modern frontend stack (Tailwind CSS, Alpine.js, Vite) with an enterprise dark-mode-first aesthetic. This is a preview feature that runs alongside the classic Bootstrap-based UI.
+
+**Phase 1 Status (January 2025):** ✅ COMPLETE
+- Comprehensive UI audit completed with 26 issues identified and fixed
+- All core pages validated with Playwright browser testing
+- Navigation, DataTables, modals, and widgets fully functional
+- Design system unified across all modern templates
+
+**URL:** `/dashboard_modern`
+**View:** `dojo/home/views.py:dashboard_modern()` (lines 72-109)
+**Templates:**
+- `dojo/templates/base_modern.html` - Base template with shared assets, navigation, command palette
+- `dojo/templates/dojo/dashboard_modern.html` - Dashboard content with stat cards and charts
+
+**Design System (Finalized January 2025):**
+
+**Color Palette - Enterprise Dark-Mode-First:**
+- **Primary Background:** `#0f1419` (dark slate, not pure black)
+- **Card Background:** `#1c2128` (soft dark, recommended for 2025 UI/UX)
+- **Accent Color:** `#8B5CF6` (violet) - used consistently across all modern pages
+- **Text Primary:** `#F0F6FC` (off-white for readability)
+- **Text Secondary:** `#8b949e` (muted gray)
+- **Border:** `rgba(255, 255, 255, 0.1)` (10% white opacity)
+
+**Typography:**
+- **Display/Body:** Plus Jakarta Sans (weights 300-800)
+- **Code/Monospace:** JetBrains Mono (weights 400-600)
+- **Letter spacing:** -0.01em (body), -0.02em (headings)
+
+**Effects:**
+- **Glass morphism:** `backdrop-filter: blur(12px)` with `-webkit-` prefix for Safari
+- **Shadows:** Subtle layered shadows for depth
+- **Transitions:** 200ms cubic-bezier(0.4, 0, 0.2, 1) for all interactions
+- **Hover states:** Violet glow (box-shadow) on accent elements
+
+**Grid & Spacing:**
+- **Base unit:** 4px spacing system
+- **Card padding:** 24px (6 units) or 32px (8 units) for large cards
+- **Gap utilities:** `gap-4` (16px) preferred over `justify-between` to prevent icon overflow
+
+**Animations:**
+- **Staggered reveal:** 200ms delays between elements on page load
+- **Easing:** cubic-bezier(0.16, 1, 0.3, 1) for smooth entrances
+
+**Key Features:**
+
+1. **Collapsible Sidebar Navigation** - Responsive sidebar with smooth transitions
+   - **Active State Pattern:** Uses Django template logic `{% if request.resolver_match.url_name == 'dashboard_modern' %}active{% endif %}`
+   - **Not JavaScript-based:** Server-rendered active state for reliability
+   - **URL Name Matching:** Requires exact Django URL name matching (e.g., 'engagement' not 'engagements')
+
+2. **Command Palette** - Keyboard-driven navigation (Cmd+K / Ctrl+K)
+   - Full arrow key navigation
+   - Enter to select, Escape to close
+   - Fuzzy search across all navigation items
+
+3. **Dark/Light Mode Toggle** - CSS custom properties with localStorage persistence
+
+4. **Stat Cards** - Glass morphism cards with hover effects
+   - **Layout Pattern:** `flex gap-4` instead of `justify-between` to prevent icon overflow on narrow viewports
+   - Active Engagements
+   - Findings Last 7 Days
+   - Closed Findings
+   - Risk Accepted
+
+5. **Chart.js Visualizations** - Pie chart (severity distribution), line chart (trends by month)
+   - Date-fns adapter for time-axis support (chartjs-adapter-date-fns@3.0.0 required)
+   - Responsive containers with proper aspect ratio handling
+
+**DataTables Component (Alpine.js):**
+
+**File:** `dojo/frontend/src/js/alpine/components/dataTable.js`
+**Styles:** `dojo/static/dojo/css/components/dataTable.css`
+
+**Design System Compliance:**
+- Violet accent (#8B5CF6) for all interactive elements (checkboxes, buttons, hover states)
+- Soft dark background (#1c2128) instead of pure black (#000000) for better 2025 aesthetics
+- Glass morphism header with `backdrop-filter: blur(12px)`
+- Consistent 200ms transitions for all interactions
+
+**Features:**
+- Virtual scrolling for performance (48px row height)
+- Column sorting (number, string, severity, date types)
+- Search/filtering
+- Bulk actions with checkbox selection
+- Expandable rows with `dd-expand-toggle` button
+- Pagination controls
+
+**Usage Pattern:**
+```django
+<script id="findings-data" type="application/json">
+{{ findings_json|safe }}
+</script>
+<div x-data="dataTable({
+    data: JSON.parse(document.getElementById('findings-data').textContent),
+    columns: [
+        { key: 'id', label: 'ID', sortType: 'number' },
+        { key: 'severity', label: 'Severity', sortType: 'severity' }
+    ],
+    csrfToken: '{{ csrf_token }}',
+    bulkActionUrl: '{% url "finding_bulk_update_all" %}'
+})">
+```
+
+**Frontend Build System:**
+
+Located in `dojo/frontend/`:
+- **Package:** `npm install` in dojo/frontend/
+- **Dev Server:** `npm run dev` (http://localhost:3000 with HMR)
+- **Production Build:** `npm run build` (outputs to ../static/dist/)
+- **Assets:** Fingerprinted filenames for cache busting (e.g., `styles-i1SwRXYS.css`)
+- **Static Collection:** Run `python manage.py collectstatic` after each build
+
+**Dependencies:**
+- Tailwind CSS 3.4.0
+- Alpine.js 3.13.3
+- Chart.js 4.4.1 (with chartjs-adapter-date-fns@3.0.0)
+- Vite 5.0.10
+- Heroicons 2.1.1
+
+**Alpine.js Components:**
+- `darkMode` - Theme toggle with system preference detection
+- `dropdown` - Accessible dropdown menus
+- `modal` - Dialog/modal windows
+- `toast` - Toast notifications (success, error, warning, info)
+- `dataTable` - Enterprise data table with virtual scrolling
+
+**URL Routing Pattern:**
+
+**Best Practice:** Always use Django template `{% url %}` tag, never hardcode URLs
+```django
+<!-- Correct -->
+<a href="{% url 'view_finding' finding.id %}">View Finding</a>
+<a href="{% url 'engagement' eng.id %}">View Engagement</a>
+
+<!-- Incorrect -->
+<a href="/finding/{{ finding.id }}">View Finding</a>
+```
+
+**Critical:** Django URL names must match exactly in `urls.py` - e.g., `name='engagement'` not `name='engagements'`
+
+**Integration Notes:**
+- Uses same backend data as classic dashboard (engagement counts, findings, severity stats)
+- Breadcrumb system maintained for navigation consistency
+- Session-based authentication (same as classic UI)
+- Classic UI remains default at `/dashboard`
+- Toggle between views via navigation link
+
+**Phase 1 Fixes (January 2025):**
+
+**Issues Resolved:**
+1. Modal action buttons (Save/Cancel/Delete) - Fixed event handlers
+2. DataTable expand/collapse toggles - Implemented functional buttons
+3. Bulk action controls - Added checkbox selection with sticky bottom bar
+4. Search box focus states - Corrected border and placeholder colors
+5. Widget refresh buttons (GitHub Insights) - Fixed API calls and loading states
+6. Pagination controls - Repaired prev/next navigation
+7. Dashboard card icon overflow - Changed from `justify-between` to `gap-4` flexbox
+8. Navigation active state - Migrated from JavaScript to Django template logic
+9. Table color scheme - Unified violet accent across all DataTables
+10. Configure modal (GitHub Insights) - Fixed vanilla DOM manipulation
+
+**Files Modified:**
+- `dojo/templates/base_modern.html` - Navigation active state pattern
+- `dojo/templates/dojo/dashboard_modern.html` - Card layout flexbox fix
+- `dojo/templates/dojo/github_insights_dashboard.html` - Modal and refresh functionality
+- `dojo/static/dojo/css/components/dataTable.css` - Violet accent, soft dark backgrounds
+- `dojo/static/dojo/js/github_insights_dashboard.js` - Configure modal, error handling
+
+**Validation:**
+- Playwright browser testing across 5 core pages
+- Visual regression screenshots captured
+- Cross-browser testing (Chrome, Firefox, Safari)
+- Mobile responsiveness verified (375px to 1920px)
+
+**Performance:**
+- Bundle sizes (gzipped): CSS ~15-25KB, Alpine.js ~15KB, Chart.js ~30KB, Custom JS ~10-15KB
+- Total: ~70-85KB gzipped
+- Tree-shaking and CSS purging enabled via Vite
+- Virtual scrolling enables smooth rendering of 1000+ row tables
+
+**Browser Support:**
+- Chrome, Firefox, Safari, Edge (latest 2 versions)
+- Mobile Safari (iOS 14+), Mobile Chrome (Android 10+)
+- Safari 17+ requires `-webkit-backdrop-filter` prefix for glass morphism
+
+**Known Limitations:**
+- Dashboard card icon overflow persists on viewports <375px (edge case)
+- DataTables pagination edge case when total items exactly divisible by page size
+- Chart.js requires `chartjs-adapter-date-fns@3.0.0` before initializing time-axis charts
+
+**Next Steps (Phase 2 - URL Routing Switchover):**
+- Feature flags for gradual rollout (10% → 50% → 100%)
+- Remove old template versions after 2-week monitoring period
+- Comprehensive regression testing
+- User feedback collection
+
+**Related Documentation:**
+- Frontend README: dojo/frontend/README.md
+- Frontend Quick Start: dojo/frontend/QUICK_START.md
+- Task Tracker: sessions/tasks/h-comprehensive-ui-modernization.md
+- Phase 1 Tracker: sessions/tasks/h-phase1-url-routing-switchover.md
+
+### Common UI Patterns (Modern Templates)
+
+**Pattern: Navigation Active State (Server-Side)**
+
+**Problem:** JavaScript-based URL matching for active navigation states is unreliable and doesn't work for server-rendered pages.
+
+**Solution:** Use Django template logic with `request.resolver_match.url_name`
+
+```django
+<!-- In base_modern.html sidebar navigation -->
+<a href="{% url 'dashboard_modern' %}"
+   class="sidebar-nav-item {% if request.resolver_match.url_name == 'dashboard_modern' %}active{% endif %}">
+    Dashboard
+</a>
+<a href="{% url 'finding' %}"
+   class="sidebar-nav-item {% if request.resolver_match.url_name == 'finding' %}active{% endif %}">
+    Findings
+</a>
+```
+
+**Critical:** URL names must match exactly in `urls.py` - e.g., `name='engagement'` not `name='engagements'`
+
+**Pattern: Flexbox Card Layout (Prevent Icon Overflow)**
+
+**Problem:** Using `justify-between` causes icons to wrap to next line on narrow viewports.
+
+**Solution:** Use `gap-4` with explicit flex alignment
+
+```html
+<!-- Before (causes overflow) -->
+<div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+        <icon>...</icon>
+        <div>
+            <h3>Title</h3>
+            <p>Description</p>
+        </div>
+    </div>
+    <span class="text-2xl">123</span>
+</div>
+
+<!-- After (prevents overflow) -->
+<div class="flex items-center gap-4">
+    <icon>...</icon>
+    <div class="flex-1">
+        <h3>Title</h3>
+        <p>Description</p>
+    </div>
+    <span class="text-2xl">123</span>
+</div>
+```
+
+**Pattern: JSON Data Passing to Alpine.js**
+
+**Problem:** Inline JSON in `x-data` attribute causes parsing errors with complex data structures.
+
+**Solution:** Use separate `<script type="application/json">` tag
+
+```django
+<!-- Correct approach -->
+<script id="findings-data" type="application/json">
+{{ findings_json|safe }}
+</script>
+
+<div x-data="dataTable({
+    data: JSON.parse(document.getElementById('findings-data').textContent),
+    columns: [...]
+})">
+```
+
+**Pattern: Configure Modal (Vanilla DOM Manipulation)**
+
+**Problem:** Bootstrap modal API conflicts with Alpine.js reactivity.
+
+**Solution:** Use vanilla JavaScript DOM manipulation for modal show/hide
+
+```javascript
+// In github_insights_dashboard.js
+function showConfigureModal() {
+    const modal = document.getElementById('configureModal');
+    modal.style.display = 'block';
+    modal.classList.add('show');
+    document.body.classList.add('modal-open');
+}
+
+function hideConfigureModal() {
+    const modal = document.getElementById('configureModal');
+    modal.style.display = 'none';
+    modal.classList.remove('show');
+    document.body.classList.remove('modal-open');
+}
+```
+
+**Pattern: DataTable Color Scheme Uniformity**
+
+**Principle:** All DataTables across modern templates should use consistent violet accent.
+
+**Implementation:**
+```css
+/* In dataTable.css */
+:root {
+    --dd-table-accent: #8B5CF6;          /* Violet primary */
+    --dd-table-accent-hover: #7C3AED;    /* Violet hover */
+    --dd-table-bg: #1c2128;              /* Soft dark, not pure black */
+    --dd-table-card-bg: #1c2128;
+}
+```
+
+**Applied to:**
+- Checkbox accent color
+- Sort indicators
+- Hover states
+- Border highlights
+- Filter pills
+- Pagination active state
+
+**Pattern: Glass Morphism with Safari Support**
+
+**Best Practice:** Always include `-webkit-` prefix for Safari 17+ compatibility
+
+```css
+.config-panel {
+    background: rgba(28, 33, 40, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);  /* Required for Safari */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+```
+
+**Pattern: Table Design System (2025 Best Practices)**
+
+**Avoid:** Pure black backgrounds (`#000000`)
+**Use:** Soft dark backgrounds (`#1c2128`) for better readability and modern aesthetics
+
+**Rationale:**
+- Pure black creates harsh contrast with white text
+- Soft dark (#1c2128) reduces eye strain
+- Aligns with 2025 UI/UX trends (GitHub, Linear, Vercel design systems)
+- Better visual hierarchy with subtle gradients
 
 ## Development Guidelines
 

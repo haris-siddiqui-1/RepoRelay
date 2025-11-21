@@ -1,0 +1,358 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+{% load display_tags %}
+
+{% block add_styles %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'dojo/css/components/dataTable.css' %}">
+<style>
+    .findings-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .filter-card {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 200ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Force sort icon sizing */
+    .dd-sort-icon svg {
+        width: 12px !important;
+        height: 12px !important;
+        flex-shrink: 0;
+    }
+
+    /* Fix search box styling */
+    .dd-table-search {
+        position: relative !important;
+        flex: 1 !important;
+        max-width: 300px !important;
+    }
+
+    .dd-table-search input {
+        width: 100% !important;
+        padding: 8px 12px 8px 36px !important;
+        background: var(--dd-table-bg, #0f1419) !important;
+        border: 1px solid var(--dd-table-border, rgba(255, 255, 255, 0.1)) !important;
+        border-radius: 6px !important;
+        color: var(--dd-table-text, #e6edf3) !important;
+        font-size: 13px !important;
+        transition: border-color 200ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    .dd-table-search input::placeholder {
+        color: var(--dd-table-text-muted, #7d8590) !important;
+    }
+
+    .dd-table-search input:focus {
+        outline: none !important;
+        border-color: var(--dd-table-accent, #8B5CF6) !important;
+    }
+
+    .dd-table-search-icon {
+        position: absolute !important;
+        left: 10px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        color: var(--dd-table-text-muted, #7d8590) !important;
+        pointer-events: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Findings List Header -->
+<div class="mb-12 findings-header">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                {% if filter_name %}{{ filter_name }} {% endif %}{% trans "Findings" %}
+            </h1>
+            <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">
+                {% trans "Security vulnerabilities and issues" %}
+            </p>
+        </div>
+        <div>
+            {% if user_has_permission %}
+            <a href="{% url 'add_findings' %}"
+               class="inline-flex items-center px-6 py-3 bg-accent-500 text-white font-sans text-sm font-medium rounded-lg hover:bg-accent-600 transition-colors duration-200">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+                {% trans "Add Finding" %}
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Stats Cards (if showing summary stats) -->
+{% if show_stats %}
+<div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-12">
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">Critical</div>
+        <div class="text-3xl font-bold text-error" style="text-shadow: 0 0 30px rgba(239, 68, 68, 0.2);">{{ critical_count|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">High</div>
+        <div class="text-3xl font-bold text-warning" style="text-shadow: 0 0 30px rgba(251, 146, 60, 0.2);">{{ high_count|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">Medium</div>
+        <div class="text-3xl font-bold text-accent-400">{{ medium_count|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">Low</div>
+        <div class="text-3xl font-bold text-enterprise-text-secondary">{{ low_count|default:0 }}</div>
+    </div>
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="text-sm font-medium text-enterprise-text-secondary tracking-widest uppercase mb-2">Info</div>
+        <div class="text-3xl font-bold text-enterprise-text-secondary">{{ info_count|default:0 }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Findings Table with Alpine.js Data Table Component -->
+<script id="findings-data" type="application/json">
+{{ findings_json|safe }}
+</script>
+<div class="enterprise-card rounded-lg p-8 filter-card">
+    <div x-data="dataTable({
+        data: JSON.parse(document.getElementById('findings-data').textContent),
+        columns: [
+            { key: 'id', label: 'ID', sortType: 'number' },
+            { key: 'severity', label: 'Severity', sortType: 'severity' },
+            { key: 'title', label: 'Title', sortType: 'string' },
+            { key: 'cwe', label: 'CWE', sortType: 'string' },
+            { key: 'date', label: 'Date', sortType: 'date' },
+            { key: 'age', label: 'Age', sortType: 'number' },
+            { key: 'product_name', label: 'Product', sortType: 'string' },
+            { key: 'active', label: 'Status', sortType: 'string' },
+            { key: 'verified', label: 'Verified', sortType: 'string' }
+        ],
+        csrfToken: '{{ csrf_token }}',
+        bulkActionUrl: '{% url "finding_bulk_update_all" %}'
+    })">
+        <!-- Toolbar with search and filters -->
+        <div class="mb-6 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="dd-table-search">
+                    <svg class="dd-table-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
+                    </svg>
+                    <input type="text" placeholder="{% trans 'Search findings...' %}" @input="search($event.target.value)">
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-sm text-enterprise-text-secondary">
+                    <span x-text="filteredData.length"></span> {% trans "findings" %}
+                </span>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="dd-table-enterprise">
+            <!-- Fixed Header Table -->
+            <table class="dd-table dd-table-header-fixed" x-ref="headerTable">
+                <thead class="dd-table-header">
+                    <tr>
+                        <th class="dd-table-checkbox">
+                            <input type="checkbox"
+                                   :checked="selectAll"
+                                   @change="toggleSelectAll()"
+                                   aria-label="{% trans 'Select all' %}">
+                        </th>
+                        <th style="width: 40px;"></th>
+                        <template x-for="col in columns" :key="col.key">
+                            <th class="sortable"
+                                :class="{ 'sorted': sortColumn === col.key }"
+                                @click="sort(col.key)"
+                                :aria-sort="sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                <span x-text="col.label"></span>
+                                <span class="dd-sort-icon">
+                                    <template x-if="sortColumn !== col.key">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 1l4 5H4l4-5zm0 14l-4-5h8l-4 5z"/>
+                                        </svg>
+                                    </template>
+                                    <template x-if="sortColumn === col.key && sortDirection === 'asc'">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 1l4 5H4l4-5z"/>
+                                        </svg>
+                                    </template>
+                                    <template x-if="sortColumn === col.key && sortDirection === 'desc'">
+                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                            <path d="M8 15l-4-5h8l-4 5z"/>
+                                        </svg>
+                                    </template>
+                                </span>
+                            </th>
+                        </template>
+                        <th>{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+            </table>
+
+            <!-- Scrollable Body Container with Virtual Scrolling -->
+            <div class="dd-table-scroll-container"
+                 x-ref="tableContainer"
+                 @scroll="handleScroll($event)"
+                 style="height: 600px;"
+                 @keydown="handleKeydown($event)"
+                 tabindex="0"
+                 role="grid"
+                 aria-label="{% trans 'Findings table' %}">
+
+                <!-- Virtual Scrolling Spacer -->
+                <div class="dd-table-virtual-spacer" :style="{ height: totalHeight + 'px' }">
+                    <div class="dd-table-virtual-content" :style="{ transform: 'translateY(' + offsetY + 'px)' }">
+                        <table class="dd-table dd-table-body-only" x-ref="bodyTable">
+                            <tbody class="dd-table-body">
+                                <template x-for="(row, index) in visibleData" :key="row.id">
+                                    <tr class="dd-table-row"
+                                        :class="{
+                                            'selected': isSelected(row.id),
+                                            'expanded': isExpanded(row.id),
+                                            'focused': focusedRowIndex === startIndex + index
+                                        }">
+
+                                        <!-- Checkbox -->
+                                        <td class="dd-table-cell dd-table-checkbox" @click.stop>
+                                            <input type="checkbox"
+                                                   :checked="isSelected(row.id)"
+                                                   @change="toggleSelect(row.id)"
+                                                   :aria-label="'Select finding ' + row.id">
+                                        </td>
+
+                                        <!-- Expand Toggle -->
+                                        <td class="dd-table-cell" @click.stop>
+                                            <button class="dd-expand-toggle"
+                                                    :class="{ 'expanded': isExpanded(row.id) }"
+                                                    @click="toggleExpand(row.id)"
+                                                    :aria-expanded="isExpanded(row.id)"
+                                                    aria-label="{% trans 'Toggle row details' %}">
+                                                <svg viewBox="0 0 16 16" fill="currentColor">
+                                                    <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                                                </svg>
+                                            </button>
+                                        </td>
+
+                                        <!-- Data Cells -->
+                                        <template x-for="col in columns" :key="col.key">
+                                            <td class="dd-table-cell"
+                                                :class="{
+                                                    'monospace': ['id', 'cwe'].includes(col.key),
+                                                    'truncate': col.key === 'title'
+                                                }"
+                                                :title="row[col.key]"
+                                                @click="if (col.key === 'title') window.location.href = '/finding/' + row.id">
+
+                                                <!-- Severity Badge -->
+                                                <template x-if="col.key === 'severity'">
+                                                    <span class="dd-severity-badge"
+                                                          :class="row.severity.toLowerCase()"
+                                                          x-text="row.severity"></span>
+                                                </template>
+
+                                                <!-- Status/Active Badge -->
+                                                <template x-if="col.key === 'active'">
+                                                    <span class="dd-status-badge"
+                                                          :class="{
+                                                              'active': row.active === 'Active',
+                                                              'inactive': row.active !== 'Active'
+                                                          }"
+                                                          x-text="row.active"></span>
+                                                </template>
+
+                                                <!-- Verified Badge -->
+                                                <template x-if="col.key === 'verified'">
+                                                    <span class="dd-status-badge verified"
+                                                          x-show="row.verified"
+                                                          x-text="'Verified'"></span>
+                                                </template>
+
+                                                <!-- Default Cell -->
+                                                <template x-if="!['severity', 'active', 'verified'].includes(col.key)">
+                                                    <span x-text="row[col.key]"></span>
+                                                </template>
+                                            </td>
+                                        </template>
+
+                                        <!-- Actions Column -->
+                                        <td class="dd-table-cell">
+                                            <a :href="'/finding/' + row.id"
+                                               class="text-accent-400 hover:text-accent-300 text-sm font-medium">
+                                                {% trans "View" %}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Actions Bar -->
+            <div class="dd-bulk-actions" :class="{ 'visible': showBulkActions }">
+                <span class="dd-bulk-actions-count">
+                    <strong x-text="selected.length"></strong> {% trans "items selected" %}
+                </span>
+                <button class="dd-bulk-action-btn" @click="submitBulkAction('close')">
+                    {% trans "Close" %}
+                </button>
+                <button class="dd-bulk-action-btn" @click="submitBulkAction('verify')">
+                    {% trans "Verify" %}
+                </button>
+                <button class="dd-bulk-action-btn" @click="submitBulkAction('mitigate')">
+                    {% trans "Mitigate" %}
+                </button>
+                <button class="dd-bulk-action-btn danger" @click="submitBulkAction('delete')">
+                    {% trans "Delete" %}
+                </button>
+                <button class="dd-bulk-action-btn" @click="clearSelection()">
+                    {% trans "Cancel" %}
+                </button>
+            </div>
+
+            <!-- Pagination Info -->
+            <div class="dd-table-pagination">
+                <div class="dd-pagination-info">
+                    {% trans "Showing" %} <span x-text="startIndex + 1"></span>-<span x-text="Math.min(endIndex, filteredData.length)"></span>
+                    {% trans "of" %} <span x-text="filteredData.length"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+{% endblock %}

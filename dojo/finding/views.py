@@ -324,7 +324,7 @@ class ListFindings(View, BaseListFindings):
         return request, context
 
     def get_template(self):
-        return "dojo/findings_list.html"
+        return "dojo/findings_list_modern.html"
 
     def add_breadcrumbs(self, request: HttpRequest, context: dict):
         # show custom breadcrumb if user has filtered by exactly 1 endpoint
@@ -362,10 +362,28 @@ class ListFindings(View, BaseListFindings):
             self.get_prefetch_type())
         # Add some breadcrumbs
         request, context = self.add_breadcrumbs(request, context)
+        # Serialize findings for Alpine.js data table
+        import json
+        findings_json = json.dumps([
+            {
+                "id": f.id,
+                "severity": f.severity,
+                "title": f.title,
+                "cwe": f.cwe if f.cwe else "",
+                "date": f.date.strftime("%Y-%m-%d") if f.date else "",
+                "age": (timezone.now().date() - f.date).days if f.date else 0,
+                "product_name": f.test.engagement.product.name if f.test and f.test.engagement else "",
+                "active": "Active" if f.active else "Inactive",
+                "verified": "Yes" if f.verified else "No",
+            }
+            for f in paged_findings.object_list
+        ])
+
         # Add the filtered and paged findings into the context
         context |= {
             "findings": paged_findings,
             "filtered": filtered_findings,
+            "findings_json": findings_json,
         }
         # Render the view
         return render(request, self.get_template(), context)
@@ -680,7 +698,7 @@ class ViewFinding(View):
         return context
 
     def get_template(self):
-        return "dojo/view_finding.html"
+        return "dojo/view_finding_modern.html"
 
     def get(self, request: HttpRequest, finding_id: int):
         # Get the initial objects

@@ -1,0 +1,735 @@
+/**
+ * Enterprise Data Table Styles for DefectDojo
+ *
+ * Design System Compliance:
+ * - Colors: Dark mode first (#0f1419 bg, #1c2128 cards)
+ * - Borders: 1px solid rgba(255,255,255,0.1)
+ * - Typography: Plus Jakarta Sans for text, JetBrains Mono for technical
+ * - Animations: 200ms cubic-bezier(0.4, 0, 0.2, 1)
+ * - Hover: Background opacity change, not color change
+ */
+
+/* ============================================
+   CSS CUSTOM PROPERTIES
+   ============================================ */
+
+.dd-table-enterprise {
+    /* Colors - Dark Mode First */
+    --dd-table-bg: #1c2128;
+    --dd-table-card-bg: #1c2128;
+    --dd-table-header-bg: rgba(28, 33, 40, 0.85);
+    --dd-table-border: rgba(255, 255, 255, 0.1);
+    --dd-table-text: #e6edf3;
+    --dd-table-text-muted: #7d8590;
+    --dd-table-accent: #8B5CF6;
+    --dd-table-accent-hover: #7C3AED;
+
+    /* Row Colors */
+    --dd-table-row-hover: rgba(255, 255, 255, 0.04);
+    --dd-table-row-alt: rgba(255, 255, 255, 0.02);
+    --dd-table-row-selected: rgba(139, 92, 246, 0.1);
+    --dd-table-row-expanded: rgba(139, 92, 246, 0.05);
+
+    /* Severity Colors */
+    --dd-severity-critical: #f85149;
+    --dd-severity-high: #f0883e;
+    --dd-severity-medium: #d29922;
+    --dd-severity-low: #3fb950;
+    --dd-severity-info: #58a6ff;
+
+    /* Spacing */
+    --dd-table-cell-padding: 12px 16px;
+    --dd-table-row-height: 48px;
+
+    /* Animation */
+    --dd-table-transition: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Light Mode Override */
+.dd-table-enterprise.light-mode {
+    --dd-table-bg: #ffffff;
+    --dd-table-card-bg: #f6f8fa;
+    --dd-table-header-bg: rgba(246, 248, 250, 0.85);
+    --dd-table-border: rgba(0, 0, 0, 0.1);
+    --dd-table-text: #24292f;
+    --dd-table-text-muted: #57606a;
+    --dd-table-row-hover: rgba(0, 0, 0, 0.04);
+    --dd-table-row-alt: rgba(0, 0, 0, 0.02);
+    --dd-table-row-selected: rgba(139, 92, 246, 0.08);
+}
+
+/* ============================================
+   TABLE CONTAINER
+   ============================================ */
+
+.dd-table-enterprise {
+    position: relative;
+    background: var(--dd-table-card-bg);
+    border: 1px solid var(--dd-table-border);
+    border-radius: 12px;
+    overflow: hidden;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.dd-table-scroll-container {
+    overflow-y: auto;
+    overflow-x: auto;
+    max-height: 600px;
+    position: relative;
+}
+
+/* Custom Scrollbar */
+.dd-table-scroll-container::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.dd-table-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dd-table-scroll-container::-webkit-scrollbar-thumb {
+    background: var(--dd-table-border);
+    border-radius: 4px;
+}
+
+.dd-table-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: var(--dd-table-text-muted);
+}
+
+/* Firefox scrollbar */
+.dd-table-scroll-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--dd-table-border) transparent;
+}
+
+/* ============================================
+   TABLE STRUCTURE
+   ============================================ */
+
+.dd-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+/* Dual-table layout support */
+.dd-table-header-fixed {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+}
+
+.dd-table-body-only {
+    display: table;
+    table-layout: fixed;
+    width: 100%;
+}
+
+/* ============================================
+   HEADER - Fixed with Glass Effect
+   ============================================ */
+
+.dd-table-header {
+    background: var(--dd-table-header-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--dd-table-border);
+}
+
+/* Header table is fixed above scroll container */
+.dd-table-header-fixed {
+    position: relative;
+    z-index: 10;
+}
+
+.dd-table-header th {
+    padding: var(--dd-table-cell-padding);
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--dd-table-text-muted);
+    white-space: nowrap;
+    user-select: none;
+}
+
+/* Sortable Column */
+.dd-table-header th.sortable {
+    cursor: pointer;
+    transition: color var(--dd-table-transition);
+}
+
+.dd-table-header th.sortable:hover {
+    color: var(--dd-table-text);
+}
+
+.dd-table-header th.sorted {
+    color: var(--dd-table-accent);
+}
+
+/* Sort Icons */
+.dd-sort-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    opacity: 0.5;
+    transition: opacity var(--dd-table-transition);
+}
+
+.dd-table-header th.sortable:hover .dd-sort-icon,
+.dd-table-header th.sorted .dd-sort-icon {
+    opacity: 1;
+}
+
+.dd-sort-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ============================================
+   BODY & ROWS
+   ============================================ */
+
+.dd-table-body {
+    position: relative;
+}
+
+.dd-table-row {
+    height: var(--dd-table-row-height);
+    border-bottom: 1px solid var(--dd-table-border);
+    transition: background-color var(--dd-table-transition);
+}
+
+/* Alternating rows - subtle 2% opacity */
+.dd-table-row:nth-child(even) {
+    background: var(--dd-table-row-alt);
+}
+
+/* Hover state */
+.dd-table-row:hover {
+    background: var(--dd-table-row-hover);
+}
+
+/* Selected state */
+.dd-table-row.selected {
+    background: var(--dd-table-row-selected);
+}
+
+/* Expanded state */
+.dd-table-row.expanded {
+    background: var(--dd-table-row-expanded);
+}
+
+/* Focused state (keyboard navigation) */
+.dd-table-row.focused {
+    outline: 2px solid var(--dd-table-accent);
+    outline-offset: -2px;
+}
+
+/* ============================================
+   CELLS
+   ============================================ */
+
+.dd-table-cell {
+    padding: var(--dd-table-cell-padding);
+    color: var(--dd-table-text);
+    font-size: 14px;
+    vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Monospace for technical values */
+.dd-table-cell.monospace {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 13px;
+}
+
+/* Truncate long text with tooltip */
+.dd-table-cell.truncate {
+    max-width: 200px;
+}
+
+/* ============================================
+   CHECKBOX COLUMN
+   ============================================ */
+
+.dd-table-checkbox {
+    width: 40px;
+    padding: 8px 12px;
+    text-align: center;
+}
+
+.dd-table-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--dd-table-accent);
+    border-radius: 4px;
+}
+
+/* ============================================
+   SEVERITY BADGES
+   ============================================ */
+
+.dd-severity-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.dd-severity-badge.critical {
+    background: rgba(248, 81, 73, 0.15);
+    color: var(--dd-severity-critical);
+}
+
+.dd-severity-badge.high {
+    background: rgba(240, 136, 62, 0.15);
+    color: var(--dd-severity-high);
+}
+
+.dd-severity-badge.medium {
+    background: rgba(210, 153, 34, 0.15);
+    color: var(--dd-severity-medium);
+}
+
+.dd-severity-badge.low {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--dd-severity-low);
+}
+
+.dd-severity-badge.info {
+    background: rgba(88, 166, 255, 0.15);
+    color: var(--dd-severity-info);
+}
+
+/* ============================================
+   STATUS BADGES
+   ============================================ */
+
+.dd-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.dd-status-badge.active {
+    background: rgba(63, 185, 80, 0.15);
+    color: var(--dd-severity-low);
+}
+
+.dd-status-badge.inactive {
+    background: rgba(125, 133, 144, 0.15);
+    color: var(--dd-table-text-muted);
+}
+
+.dd-status-badge.verified {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--dd-table-accent);
+}
+
+/* ============================================
+   EXPANDABLE ROW CONTENT
+   ============================================ */
+
+.dd-table-row-expanded-content {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 300ms ease-in-out;
+}
+
+.dd-table-row-expanded-content.open {
+    max-height: 500px;
+}
+
+.dd-table-expanded-inner {
+    padding: 16px 48px;
+    background: var(--dd-table-row-expanded);
+    border-bottom: 1px solid var(--dd-table-border);
+}
+
+/* Expand toggle button */
+.dd-expand-toggle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    border: none;
+    background: transparent;
+    color: var(--dd-table-text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all var(--dd-table-transition);
+}
+
+.dd-expand-toggle:hover {
+    background: var(--dd-table-row-hover);
+    color: var(--dd-table-text);
+}
+
+.dd-expand-toggle svg {
+    width: 16px;
+    height: 16px;
+    transition: transform var(--dd-table-transition);
+}
+
+.dd-expand-toggle.expanded svg {
+    transform: rotate(90deg);
+}
+
+/* ============================================
+   BULK ACTIONS BAR
+   ============================================ */
+
+.dd-bulk-actions {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--dd-table-header-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--dd-table-border);
+    padding: 12px 16px;
+    display: flex !important;
+    align-items: center;
+    gap: 12px !important;
+    transform: translateY(100%);
+    transition: transform var(--dd-table-transition);
+}
+
+.dd-bulk-actions.visible {
+    transform: translateY(0);
+}
+
+.dd-bulk-actions-count {
+    font-size: 13px;
+    color: var(--dd-table-text-muted);
+}
+
+.dd-bulk-actions-count strong {
+    color: var(--dd-table-accent);
+}
+
+.dd-bulk-action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--dd-table-transition);
+    border: 1px solid var(--dd-table-border);
+    background: var(--dd-table-card-bg);
+    color: var(--dd-table-text);
+}
+
+.dd-bulk-action-btn:hover {
+    background: var(--dd-table-row-hover);
+    border-color: var(--dd-table-accent);
+}
+
+.dd-bulk-action-btn.primary {
+    background: var(--dd-table-accent);
+    border-color: var(--dd-table-accent);
+    color: white;
+}
+
+.dd-bulk-action-btn.primary:hover {
+    background: var(--dd-table-accent-hover);
+}
+
+.dd-bulk-action-btn.danger {
+    color: var(--dd-severity-critical);
+    border-color: var(--dd-severity-critical);
+}
+
+.dd-bulk-action-btn.danger:hover {
+    background: rgba(248, 81, 73, 0.1);
+}
+
+/* ============================================
+   LOADING & EMPTY STATES
+   ============================================ */
+
+.dd-table-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px;
+    color: var(--dd-table-text-muted);
+}
+
+.dd-table-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--dd-table-border);
+    border-top-color: var(--dd-table-accent);
+    border-radius: 50%;
+    animation: dd-spin 0.8s linear infinite;
+}
+
+@keyframes dd-spin {
+    to { transform: rotate(360deg); }
+}
+
+.dd-table-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--dd-table-text-muted);
+}
+
+.dd-table-empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.dd-table-empty-message {
+    font-size: 14px;
+}
+
+/* ============================================
+   VIRTUAL SCROLLING SPACER
+   ============================================ */
+
+.dd-virtual-spacer-row {
+    border: none !important;
+    background: transparent !important;
+}
+
+.dd-virtual-spacer-row td {
+    padding: 0 !important;
+    border: none !important;
+}
+
+/* Legacy support for transform-based approach */
+.dd-table-virtual-spacer {
+    position: relative;
+}
+
+.dd-table-virtual-content {
+    position: absolute;
+    width: 100%;
+}
+
+/* ============================================
+   TOOLBAR (Filter & Search)
+   ============================================ */
+
+.dd-table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--dd-table-border);
+    gap: 12px;
+}
+
+.dd-table-search {
+    position: relative;
+    flex: 1;
+    max-width: 300px;
+}
+
+.dd-table-search input {
+    width: 100%;
+    padding: 8px 12px 8px 36px;
+    background: var(--dd-table-bg);
+    border: 1px solid var(--dd-table-border);
+    border-radius: 6px;
+    color: var(--dd-table-text);
+    font-size: 13px;
+    transition: border-color var(--dd-table-transition);
+}
+
+.dd-table-search input::placeholder {
+    color: var(--dd-table-text-muted);
+}
+
+.dd-table-search input:focus {
+    outline: none;
+    border-color: var(--dd-table-accent);
+}
+
+.dd-table-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--dd-table-text-muted);
+    pointer-events: none;
+}
+
+/* Filter pills */
+.dd-table-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.dd-filter-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 12px;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid var(--dd-table-accent);
+    border-radius: 16px;
+    font-size: 12px;
+    color: var(--dd-table-accent);
+}
+
+.dd-filter-pill-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border: none;
+    background: transparent;
+    color: var(--dd-table-accent);
+    cursor: pointer;
+    border-radius: 50%;
+    transition: background var(--dd-table-transition);
+}
+
+.dd-filter-pill-remove:hover {
+    background: rgba(139, 92, 246, 0.2);
+}
+
+/* ============================================
+   PAGINATION
+   ============================================ */
+
+.dd-table-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--dd-table-border);
+    font-size: 13px;
+    color: var(--dd-table-text-muted);
+}
+
+.dd-pagination-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dd-pagination-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.dd-pagination-btn {
+    padding: 6px 10px;
+    border: 1px solid var(--dd-table-border);
+    background: transparent;
+    color: var(--dd-table-text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all var(--dd-table-transition);
+}
+
+.dd-pagination-btn:hover:not(:disabled) {
+    background: var(--dd-table-row-hover);
+    border-color: var(--dd-table-accent);
+}
+
+.dd-pagination-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dd-pagination-btn.active {
+    background: var(--dd-table-accent);
+    border-color: var(--dd-table-accent);
+    color: white;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .dd-table-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .dd-table-search {
+        max-width: none;
+    }
+
+    .dd-table-cell {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .dd-table-header th {
+        padding: 8px 12px;
+        font-size: 11px;
+    }
+
+    /* Hide less important columns on mobile */
+    .dd-table .hide-mobile {
+        display: none;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY
+   ============================================ */
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .dd-table-enterprise {
+        --dd-table-border: rgba(255, 255, 255, 0.3);
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .dd-table-enterprise,
+    .dd-table-enterprise * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+/* Focus visible */
+.dd-table-enterprise :focus-visible {
+    outline: 2px solid var(--dd-table-accent);
+    outline-offset: 2px;
+}
+
+/* Screen reader only */
+.dd-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

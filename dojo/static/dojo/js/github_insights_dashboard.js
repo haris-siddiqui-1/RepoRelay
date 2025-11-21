@@ -85,6 +85,22 @@ var GitHubInsightsDashboard = (function() {
                 config.widgetConfig = response.widget_config || [];
                 config.widgetCount = response.widget_count || 10;
 
+                // If no widgets configured, set up default widgets
+                if (config.widgetConfig.length === 0) {
+                    config.widgetConfig = [
+                        { insight_id: 'vuln_distribution', order: 0, size: 'medium', pinned: false },
+                        { insight_id: 'most_recently_updated', order: 1, size: 'medium', pinned: false },
+                        { insight_id: 'stale_repositories', order: 2, size: 'medium', pinned: false },
+                        { insight_id: 'critical_vulns', order: 3, size: 'medium', pinned: false },
+                        { insight_id: 'repos_missing_readme', order: 4, size: 'small', pinned: false },
+                        { insight_id: 'repos_missing_ci', order: 5, size: 'small', pinned: false },
+                        { insight_id: 'highest_commit_frequency', order: 6, size: 'medium', pinned: false },
+                        { insight_id: 'most_active_contributors', order: 7, size: 'medium', pinned: false },
+                        { insight_id: 'popular_languages', order: 8, size: 'small', pinned: false },
+                        { insight_id: 'unassigned_repositories', order: 9, size: 'medium', pinned: false }
+                    ];
+                }
+
                 // Update widget count selector
                 $('#widget-count').val(config.widgetCount);
 
@@ -420,7 +436,13 @@ var GitHubInsightsDashboard = (function() {
      * Show configuration modal
      */
     function showConfigurationModal() {
-        $('#configure-modal').modal('show');
+        // Use DOM manipulation instead of Bootstrap modal
+        var modal = document.getElementById('configure-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'block';
+            modal.setAttribute('aria-hidden', 'false');
+        }
         loadAvailableInsights();
     }
 
@@ -586,7 +608,13 @@ var GitHubInsightsDashboard = (function() {
             data: JSON.stringify(configData),
             success: function(response) {
                 console.log('Configuration saved successfully:', response);
-                $('#configure-modal').modal('hide');
+                // Use DOM manipulation instead of Bootstrap modal
+                var modal = document.getElementById('configure-modal');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    modal.style.display = 'none';
+                    modal.setAttribute('aria-hidden', 'true');
+                }
                 showSuccess('Dashboard configuration saved');
 
                 // Reload configuration from server to ensure consistency

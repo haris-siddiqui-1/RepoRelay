@@ -203,13 +203,31 @@ def engagements(request, view):
         top_level=not len(request.GET),
         request=request)
 
+    # Serialize engagements for Alpine.js data table
+    import json
+    engagements_json = json.dumps([
+        {
+            "id": e.id,
+            "name": e.name,
+            "target_start": e.target_start.strftime("%Y-%m-%d") if e.target_start else "",
+            "target_end": e.target_end.strftime("%Y-%m-%d") if e.target_end else "",
+            "status": "In Progress" if e.active else "Closed",
+            "product_name": e.product.name if e.product else "",
+            "product_type": e.product.prod_type.name if e.product and e.product.prod_type else "",
+            "lead_name": e.lead.get_full_name() if e.lead else "Unassigned",
+            "test_count": e.test_count if hasattr(e, "test_count") else 0,
+        }
+        for e in engs.object_list
+    ])
+
     return render(
-        request, "dojo/engagement.html", {
+        request, "dojo/engagements_modern.html", {
             "engagements": engs,
             "filter_form": filtered_engagements.form,
             "product_name_words": product_name_words,
             "engagement_name_words": engagement_name_words,
             "view": view.capitalize(),
+            "engagements_json": engagements_json,
         })
 
 
@@ -258,7 +276,7 @@ def engagements_all(request):
         request=request)
 
     return render(
-        request, "dojo/engagements_all.html", {
+        request, "dojo/engagements_modern.html", {
             "products": prods,
             "filter_form": filtered.form,
             "name_words": sorted(set(name_words)),
@@ -422,7 +440,7 @@ def copy_engagement(request, eid):
 class ViewEngagement(View):
 
     def get_template(self):
-        return "dojo/view_eng.html"
+        return "dojo/view_eng_modern.html"
 
     def get_risks_accepted(self, eng):
         accepted_findings_subquery = build_count_subquery(

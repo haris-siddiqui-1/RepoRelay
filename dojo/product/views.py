@@ -164,12 +164,27 @@ def product(request):
 
     add_breadcrumb(title=str(labels.ASSET_READ_LIST_LABEL), top_level=not len(request.GET), request=request)
 
-    return render(request, "dojo/product.html", {
+    # Serialize products for Alpine.js data table
+    import json
+    products_json = json.dumps([
+        {
+            "id": p.id,
+            "name": p.name,
+            "product_type": p.prod_type.name if p.prod_type else "",
+            "findings_count": p.findings_count if hasattr(p, "findings_count") else 0,
+            "engagement_count": p.engagement_set.count() if hasattr(p, "engagement_set") else 0,
+            "created": p.created.strftime("%Y-%m-%d") if p.created else "",
+        }
+        for p in prod_list.object_list
+    ])
+
+    return render(request, "dojo/product_modern.html", {
         "prod_list": prod_list,
         "prod_filter": prod_filter,
         "name_words": sorted(set(name_words)),
         "enable_table_filtering": get_system_setting("enable_ui_table_based_searching"),
         "benchmark_types": benchmark_types,
+        "products_json": products_json,
         "user": request.user})
 
 
@@ -308,8 +323,12 @@ def view_product(request, pid):
 
     total = critical + high + medium + low + info
 
+    # Get active engagements and recent findings for modern template
+    active_engagements = Engagement.objects.filter(product=prod, active=True).order_by("-target_start")[:5]
+    recent_findings = Finding.objects.filter(test__engagement__product=prod, active=True).order_by("-date")[:10]
+
     product_tab = Product_Tab(prod, title=str(labels.ASSET_LABEL), tab="overview")
-    return render(request, "dojo/view_product_details.html", {
+    return render(request, "dojo/view_product_details_modern.html", {
         "prod": prod,
         "product_tab": product_tab,
         "product_metadata": product_metadata,
@@ -335,7 +354,9 @@ def view_product(request, pid):
         "product_type_groups": product_type_groups,
         "personal_notifications_form": personal_notifications_form,
         "enabled_notifications": get_enabled_notifications_list(),
-        "sla": sla})
+        "sla": sla,
+        "active_engagements": active_engagements,
+        "recent_findings": recent_findings})
 
 
 @user_is_authorized(Product, Permissions.Component_View, "pid")

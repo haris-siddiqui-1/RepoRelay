@@ -52,7 +52,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         unassigned_surveys = None
 
     add_breadcrumb(request=request, clear=True)
-    return render(request, "dojo/dashboard.html", {
+    return render(request, "dojo/dashboard_modern.html", {
         "engagement_count": engagement_count,
         "finding_count": finding_count,
         "mitigated_count": mitigated_count,
@@ -69,9 +69,54 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     })
 
 
+def dashboard_modern(request: HttpRequest) -> HttpResponse:
+    """Modern UI version of the dashboard using Tailwind CSS + Alpine.js"""
+    engagements = get_authorized_engagements(Permissions.Engagement_View).distinct()
+    findings = get_authorized_findings(Permissions.Finding_View).distinct()
+
+    findings = findings.filter(duplicate=False)
+
+    engagement_count = engagements.filter(active=True).count()
+
+    today = timezone.now().date()
+
+    date_range = [today - timedelta(days=7), today]
+    finding_count = findings\
+        .filter(date__range=date_range)\
+        .count()
+    mitigated_count = findings\
+        .filter(mitigated__date__range=date_range)\
+        .count()
+    accepted_count = findings\
+        .filter(risk_acceptance__created__date__range=date_range)\
+        .count()
+
+    severity_count_all = get_severities_all(findings)
+    severity_count_by_month = get_severities_by_month(findings, today)
+
+    add_breadcrumb(request=request, clear=True)
+    return render(request, "dojo/dashboard_modern.html", {
+        "engagement_count": engagement_count,
+        "finding_count": finding_count,
+        "mitigated_count": mitigated_count,
+        "accepted_count": accepted_count,
+        "critical": severity_count_all["Critical"],
+        "high": severity_count_all["High"],
+        "medium": severity_count_all["Medium"],
+        "low": severity_count_all["Low"],
+        "info": severity_count_all["Info"],
+        "by_month": severity_count_by_month,
+    })
+
+
 def support(request: HttpRequest) -> HttpResponse:
     add_breadcrumb(title="Support", top_level=not len(request.GET), request=request)
     return render(request, "dojo/support.html", {})
+
+
+def datatable_demo(request: HttpRequest) -> HttpResponse:
+    """Demo page for the enterprise data table component."""
+    return render(request, "dojo/datatable_demo.html", {})
 
 
 def get_severities_all(findings) -> dict[str, int]:

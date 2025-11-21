@@ -217,7 +217,7 @@ class ViewTest(View):
         return request, False
 
     def get_template(self):
-        return "dojo/view_test.html"
+        return "dojo/view_test_modern.html"
 
     def get(self, request: HttpRequest, test_id: int):
         # Get the initial objects
@@ -396,7 +396,7 @@ def test_calendar(request):
     for t in tests:
         if t.target_end:
             t.target_end += timedelta(days=1)
-    return render(request, "dojo/calendar.html", {
+    return render(request, "dojo/test_calendar_modern.html", {
         "caltype": "tests",
         "leads": request.GET.getlist("lead", ""),
         "tests": tests,

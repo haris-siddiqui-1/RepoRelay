@@ -1,0 +1,339 @@
+{% extends "base_modern.html" %}
+{% load authorization_tags %}
+{% load i18n %}
+{% load static %}
+{% load display_tags %}
+
+{% block add_styles %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'dojo/css/components/dataTable.css' %}">
+<style>
+    .products-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .view-toggle {
+        display: inline-flex;
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
+        padding: 4px;
+    }
+
+    .view-toggle-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 200ms ease;
+        color: #7d8590;
+        border: none;
+        background: transparent;
+    }
+
+    .view-toggle-btn.active {
+        background: #8B5CF6;
+        color: white;
+    }
+
+    .view-toggle-btn:not(.active):hover {
+        color: #e6edf3;
+    }
+
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 24px;
+    }
+
+    .product-card {
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 24px;
+        transition: all 200ms ease;
+        cursor: pointer;
+    }
+
+    .product-card:hover {
+        border-color: #8B5CF6;
+        box-shadow: 0 0 30px rgba(139, 92, 246, 0.15);
+    }
+
+    .product-card-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #e6edf3;
+        margin-bottom: 12px;
+    }
+
+    .product-card-desc {
+        font-size: 14px;
+        color: #7d8590;
+        margin-bottom: 16px;
+        line-height: 1.6;
+    }
+
+    .product-card-stats {
+        display: flex;
+        gap: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .product-stat {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .product-stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #8B5CF6;
+    }
+
+    .product-stat-label {
+        font-size: 11px;
+        color: #7d8590;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-top: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="{ viewMode: 'grid' }">
+    <!-- Products Header -->
+    <div class="mb-12 products-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                    {% trans "Products" %}
+                </h1>
+                <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">
+                    {% trans "Application security portfolio" %}
+                </p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <!-- View Toggle -->
+                <div class="view-toggle">
+                    <button class="view-toggle-btn"
+                            :class="{ 'active': viewMode === 'grid' }"
+                            @click="viewMode = 'grid'">
+                        <svg class="w-4 h-4 inline-block mr-1.5" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5v-3zm8 0A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5v-3zm-8 8A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5v-3zm8 0A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5v-3z"/>
+                        </svg>
+                        {% trans "Grid" %}
+                    </button>
+                    <button class="view-toggle-btn"
+                            :class="{ 'active': viewMode === 'list' }"
+                            @click="viewMode = 'list'">
+                        <svg class="w-4 h-4 inline-block mr-1.5" fill="currentColor" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+                        </svg>
+                        {% trans "List" %}
+                    </button>
+                </div>
+
+                {% if user_has_permission %}
+                <a href="{% url 'new_product' %}"
+                   class="inline-flex items-center px-6 py-3 bg-accent-500 text-white font-sans text-sm font-medium rounded-lg hover:bg-accent-600 transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    {% trans "Add Product" %}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Grid View -->
+    <div x-show="viewMode === 'grid'" x-transition:enter="transition ease-out duration-300">
+        <div class="product-grid">
+            {% for product in prod_list %}
+            <div class="product-card" onclick="window.location.href='{% url 'view_product' product.id %}'">
+                <div class="product-card-title">{{ product.name }}</div>
+                <div class="product-card-desc">
+                    {% if product.description %}
+                        {{ product.description|truncatewords:20 }}
+                    {% else %}
+                        <span class="text-enterprise-text-tertiary">{% trans "No description available" %}</span>
+                    {% endif %}
+                </div>
+                <div class="product-card-stats">
+                    <div class="product-stat">
+                        <div class="product-stat-value">{{ product.findings_count|default:0 }}</div>
+                        <div class="product-stat-label">{% trans "Findings" %}</div>
+                    </div>
+                    <div class="product-stat">
+                        <div class="product-stat-value">{{ product.engagement_set.count|default:0 }}</div>
+                        <div class="product-stat-label">{% trans "Engagements" %}</div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-full enterprise-card rounded-lg p-12 text-center">
+                <svg class="w-16 h-16 mx-auto mb-4 text-enterprise-text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                </svg>
+                <p class="text-enterprise-text-secondary text-lg">{% trans "No products found" %}</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- List View -->
+    <script id="products-data" type="application/json">
+{{ products_json|safe }}
+</script>
+    <div x-show="viewMode === 'list'" x-transition:enter="transition ease-out duration-300">
+        <div class="enterprise-card rounded-lg p-8">
+            <div x-data="dataTable({
+                data: JSON.parse(document.getElementById('products-data').textContent),
+                columns: [
+                    { key: 'id', label: 'ID', sortType: 'number' },
+                    { key: 'name', label: 'Name', sortType: 'string' },
+                    { key: 'product_type', label: 'Type', sortType: 'string' },
+                    { key: 'findings_count', label: 'Findings', sortType: 'number' },
+                    { key: 'engagement_count', label: 'Engagements', sortType: 'number' },
+                    { key: 'created', label: 'Created', sortType: 'date' }
+                ],
+                csrfToken: '{{ csrf_token }}',
+                bulkActionUrl: '#'
+            })">
+                <!-- Toolbar -->
+                <div class="mb-6 flex items-center justify-between">
+                    <div class="dd-table-search">
+                        <svg class="dd-table-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path fill-rule="evenodd" d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
+                        </svg>
+                        <input type="text" placeholder="{% trans 'Search products...' %}" @input="search($event.target.value)">
+                    </div>
+                    <div class="text-sm text-enterprise-text-secondary">
+                        <span x-text="filteredData.length"></span> {% trans "products" %}
+                    </div>
+                </div>
+
+                <!-- Data Table -->
+                <div class="dd-table-enterprise">
+                    <!-- Fixed Header -->
+                    <table class="dd-table dd-table-header-fixed" x-ref="headerTable">
+                        <thead class="dd-table-header">
+                            <tr>
+                                <th class="dd-table-checkbox">
+                                    <input type="checkbox"
+                                           :checked="selectAll"
+                                           @change="toggleSelectAll()"
+                                           aria-label="{% trans 'Select all' %}">
+                                </th>
+                                <th style="width: 40px;"></th>
+                                <template x-for="col in columns" :key="col.key">
+                                    <th class="sortable"
+                                        :class="{ 'sorted': sortColumn === col.key }"
+                                        @click="sort(col.key)">
+                                        <span x-text="col.label"></span>
+                                        <span class="dd-sort-icon">
+                                            <template x-if="sortColumn !== col.key">
+                                                <svg viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 1l4 5H4l4-5zm0 14l-4-5h8l-4 5z"/>
+                                                </svg>
+                                            </template>
+                                            <template x-if="sortColumn === col.key && sortDirection === 'asc'">
+                                                <svg viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 1l4 5H4l4-5z"/>
+                                                </svg>
+                                            </template>
+                                            <template x-if="sortColumn === col.key && sortDirection === 'desc'">
+                                                <svg viewBox="0 0 16 16" fill="currentColor">
+                                                    <path d="M8 15l-4-5h8l-4 5z"/>
+                                                </svg>
+                                            </template>
+                                        </span>
+                                    </th>
+                                </template>
+                                <th>{% trans "Actions" %}</th>
+                            </tr>
+                        </thead>
+                    </table>
+
+                    <!-- Scrollable Body -->
+                    <div class="dd-table-scroll-container"
+                         x-ref="tableContainer"
+                         @scroll="handleScroll($event)"
+                         style="height: 500px;"
+                         tabindex="0">
+                        <div class="dd-table-virtual-spacer" :style="{ height: totalHeight + 'px' }">
+                            <div class="dd-table-virtual-content" :style="{ transform: 'translateY(' + offsetY + 'px)' }">
+                                <table class="dd-table dd-table-body-only" x-ref="bodyTable">
+                                    <tbody class="dd-table-body">
+                                        <template x-for="row in visibleData" :key="row.id">
+                                            <tr class="dd-table-row"
+                                                :class="{ 'selected': isSelected(row.id) }">
+                                                <td class="dd-table-cell dd-table-checkbox" @click.stop>
+                                                    <input type="checkbox"
+                                                           :checked="isSelected(row.id)"
+                                                           @change="toggleSelect(row.id)">
+                                                </td>
+                                                <td class="dd-table-cell" @click.stop>
+                                                    <button class="dd-expand-toggle"
+                                                            :class="{ 'expanded': isExpanded(row.id) }"
+                                                            @click="toggleExpand(row.id)">
+                                                        <svg viewBox="0 0 16 16" fill="currentColor">
+                                                            <path fill-rule="evenodd" d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06z"/>
+                                                        </svg>
+                                                    </button>
+                                                </td>
+                                                <template x-for="col in columns" :key="col.key">
+                                                    <td class="dd-table-cell"
+                                                        :class="{ 'monospace': col.key === 'id', 'truncate': col.key === 'name' }"
+                                                        @click="if (col.key === 'name') window.location.href = '/product/' + row.id">
+                                                        <span x-text="row[col.key]"></span>
+                                                    </td>
+                                                </template>
+                                                <td class="dd-table-cell">
+                                                    <a :href="'/product/' + row.id"
+                                                       class="text-accent-400 hover:text-accent-300 text-sm font-medium">
+                                                        {% trans "View" %}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="dd-table-pagination">
+                        <div class="dd-pagination-info">
+                            {% trans "Showing" %} <span x-text="startIndex + 1"></span>-<span x-text="Math.min(endIndex, filteredData.length)"></span>
+                            {% trans "of" %} <span x-text="filteredData.length"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script src="{% static 'dojo/js/alpine/components/dataTable.js' %}"></script>
+{% endblock %}

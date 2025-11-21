@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base_modern.html" %}
 {% load i18n %}
 {% load static %}
 
@@ -7,78 +7,393 @@
     <!-- DataTables CSS -->
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap.min.css">
     <style>
-        .insight-widget {
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: white;
+        /* Insights Page - Bold Modern Aesthetic */
+        .insights-header {
+            animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
         }
+
+        @keyframes headerReveal {
+            0% {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Filter Panel with Glass Morphism */
+        .config-panel {
+            background: rgba(28, 33, 40, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 24px;
+            margin-bottom: 32px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 150ms;
+            opacity: 0;
+        }
+
+        @keyframes slideUp {
+            0% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 24px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .form-control {
+            background: #1c2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e6edf3;
+            border-radius: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 200ms ease;
+        }
+
+        .form-control:focus {
+            border-color: #8B5CF6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%) !important;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 200ms ease;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+        }
+
+        /* Widget Grid - Asymmetric Layout */
+        #dashboard-widgets {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 24px;
+            position: relative;
+        }
+
+        .insight-widget {
+            background: rgba(28, 33, 40, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            animation: widgetAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        @keyframes widgetAppear {
+            0% {
+                opacity: 0;
+                transform: scale(0.95) translateY(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        /* Staggered animation delays */
+        .insight-widget:nth-child(1) { animation-delay: 200ms; grid-column: span 6; }
+        .insight-widget:nth-child(2) { animation-delay: 250ms; grid-column: span 6; }
+        .insight-widget:nth-child(3) { animation-delay: 300ms; grid-column: span 12; }
+        .insight-widget:nth-child(4) { animation-delay: 350ms; grid-column: span 4; }
+        .insight-widget:nth-child(5) { animation-delay: 400ms; grid-column: span 4; }
+        .insight-widget:nth-child(6) { animation-delay: 450ms; grid-column: span 4; }
+        .insight-widget:nth-child(n+7) { animation-delay: 500ms; grid-column: span 6; }
+
+        .insight-widget:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 8px 32px rgba(139, 92, 246, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .pinned-widget {
+            border: 2px solid #8B5CF6;
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
+        }
+
+        .pinned-widget::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #8B5CF6, #7C3AED);
+        }
+
+        /* Widget Header */
         .widget-header {
-            padding: 10px 15px;
-            background: #f5f5f5;
-            border-bottom: 1px solid #ddd;
+            padding: 20px 24px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(124, 58, 237, 0.02) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .widget-body {
-            padding: 15px;
+
+        .widget-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: #8B5CF6;
         }
+
+        .widget-actions {
+            display: flex !important;
+            gap: 8px !important;
+        }
+
+        .widget-actions button {
+            padding: 6px 10px;
+            font-size: 12px;
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: 6px;
+            color: #8B5CF6;
+            cursor: pointer;
+            transition: all 200ms ease;
+            margin: 0 !important;
+        }
+
+        .widget-actions button:hover {
+            background: rgba(139, 92, 246, 0.2);
+            border-color: #8B5CF6;
+        }
+
+        /* Widget Body */
+        .widget-body {
+            padding: 24px;
+        }
+
+        .widget-body h4 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #e6edf3;
+            margin-bottom: 16px;
+            letter-spacing: -0.01em;
+        }
+
         .widget-chart {
             height: 300px;
             position: relative;
         }
+
         .widget-table {
             max-height: 400px;
             overflow-y: auto;
         }
+
         .widget-table table {
             margin-bottom: 0;
+            color: #e6edf3;
         }
-        .pinned-widget {
-            border: 2px solid #007bff;
+
+        .widget-body .text-muted {
+            color: #7d8590 !important;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
         }
-        .widget-actions {
-            display: flex;
-            gap: 10px;
-        }
-        .widget-actions button {
-            padding: 2px 8px;
-            font-size: 12px;
-        }
-        .placeholder-message {
-            padding: 40px;
-            text-align: center;
-            color: #6c757d;
-        }
-        .config-panel {
-            background: #f8f9fa;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-        }
-        .filter-controls {
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
+
+        /* Loading State */
         .loading-spinner {
             text-align: center;
-            padding: 20px;
+            padding: 60px 40px;
+            color: #8B5CF6;
+        }
+
+        .loading-spinner i {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .placeholder-message {
+            padding: 80px 40px;
+            text-align: center;
+            color: #7d8590;
+        }
+
+        .placeholder-message h3 {
+            color: #e6edf3;
+            margin-bottom: 12px;
+        }
+
+        /* DataTables Override for Dark Theme */
+        .widget-table table.dataTable {
+            background: transparent !important;
+            color: #e6edf3 !important;
+        }
+
+        .widget-table table.dataTable thead th {
+            background: rgba(139, 92, 246, 0.1) !important;
+            color: #8B5CF6 !important;
+            border-color: rgba(255, 255, 255, 0.1) !important;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+        }
+
+        .widget-table table.dataTable tbody td {
+            border-color: rgba(255, 255, 255, 0.05) !important;
+            color: #e6edf3 !important;
+        }
+
+        .widget-table table.dataTable tbody tr:hover {
+            background: rgba(139, 92, 246, 0.05) !important;
+        }
+
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_paginate {
+            color: #7d8590 !important;
+        }
+
+        .dataTables_wrapper .dataTables_filter input,
+        .dataTables_wrapper .dataTables_length select {
+            background: #1c2128 !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: #e6edf3 !important;
+            border-radius: 6px;
+            padding: 6px 12px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: #8B5CF6 !important;
+            background: rgba(139, 92, 246, 0.05) !important;
+            border: 1px solid rgba(139, 92, 246, 0.2) !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+            background: rgba(139, 92, 246, 0.15) !important;
+            color: #8B5CF6 !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%) !important;
+            color: white !important;
+            border-color: #8B5CF6 !important;
+        }
+
+        /* Fix DataTables Pagination Layout - Horizontal Display */
+        .dataTables_wrapper .dataTables_paginate {
+            display: flex !important;
+            align-items: center;
+            gap: 8px !important;
+            margin-top: 16px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button,
+        .dataTables_wrapper .dataTables_paginate a,
+        .dataTables_wrapper .dataTables_paginate span {
+            display: inline-block !important;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+        }
+
+        /* Modal Styling */
+        .modal-content {
+            background: #1c2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.05) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .modal-title {
+            color: #e6edf3;
+            font-weight: 700;
+        }
+
+        .modal-body {
+            color: #e6edf3;
+        }
+
+        .modal-footer {
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .modal-footer .btn {
+            margin: 0 !important;
+        }
+
+        /* Responsive Grid */
+        @media (max-width: 1200px) {
+            #dashboard-widgets {
+                grid-template-columns: repeat(6, 1fr);
+            }
+            .insight-widget:nth-child(n) {
+                grid-column: span 6 !important;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #dashboard-widgets {
+                grid-template-columns: 1fr;
+            }
+            .insight-widget:nth-child(n) {
+                grid-column: span 1 !important;
+            }
         }
     </style>
 {% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-12">
-        <h2>
-            <i class="fa-brands fa-github"></i> {% trans "GitHub Repository Insights Dashboard" %}
-            <button class="btn btn-sm btn-primary pull-right" id="configure-dashboard">
-                <i class="fa fa-cog"></i> {% trans "Configure Dashboard" %}
-            </button>
-        </h2>
+<!-- Insights Header -->
+<div class="mb-12 insights-header">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="font-sans text-6xl font-bold leading-tight text-enterprise-text-primary tracking-tight flex items-center gap-4">
+                <i class="fa-brands fa-github" style="color: #8B5CF6;"></i> {% trans "GitHub Insights" %}
+            </h1>
+            <p class="font-sans mt-3 text-base font-light text-enterprise-text-secondary tracking-wide">
+                {% trans "Repository analytics and security insights powered by real-time data" %}
+            </p>
+        </div>
+        <button class="btn btn-primary" id="configure-dashboard" style="font-size: 14px;">
+            <i class="fa fa-cog mr-2"></i> {% trans "Configure Dashboard" %}
+        </button>
     </div>
 </div>
 
@@ -138,11 +453,11 @@
 </div>
 
 <!-- Widget Configuration Modal -->
-<div class="modal fade" id="configure-modal" tabindex="-1" role="dialog">
+<div class="modal fade hidden" id="configure-modal" tabindex="-1" role="dialog" style="display: none;" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                <button type="button" class="close" onclick="document.getElementById('configure-modal').classList.add('hidden'); document.getElementById('configure-modal').style.display='none'; document.getElementById('configure-modal').setAttribute('aria-hidden', 'true');" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
                 <h4 class="modal-title">{% trans "Configure Dashboard Widgets" %}</h4>
@@ -158,7 +473,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">{% trans "Cancel" %}</button>
+                <button type="button" class="btn btn-default" onclick="document.getElementById('configure-modal').classList.add('hidden'); document.getElementById('configure-modal').style.display='none'; document.getElementById('configure-modal').setAttribute('aria-hidden', 'true');">{% trans "Cancel" %}</button>
                 <button type="button" class="btn btn-primary" id="save-configuration">{% trans "Save Configuration" %}</button>
             </div>
         </div>
@@ -168,6 +483,8 @@
 
 {% block postscript %}
     {{ block.super }}
+    <!-- jQuery (required for DataTables and dashboard JS) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- DataTables JS -->
     <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
