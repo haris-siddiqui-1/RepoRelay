@@ -154,3 +154,10 @@ sessions/sessions-state.json
 sessions/package.json
 sessions/transcripts/
 sessions/.archived/
+
+# Playwright MCP screenshots and test results
+.playwright-mcp/
+test-results/
+
+# Frontend dependencies (dojo/frontend has its own node_modules)
+node_modules/
