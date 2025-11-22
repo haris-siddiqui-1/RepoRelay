@@ -46,9 +46,13 @@ dojo/github_collector/
 **Features**:
 - GraphQL API v4 for bulk operations (15-20x faster incremental syncs)
 - Automatic REST API fallback for reliability
+- **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
 - Incremental sync (only fetch repositories updated since last sync)
 - 36 binary signals across 5 categories (deployment, production, development, organization, security)
 - Repository tier/criticality classification (tier1-tier4, archived)
+- **Activity Metrics**: commit_count, open_issues_count, open_pr_count (added November 2025)
+- **Webhook Health Monitoring**: Detects webhook types, cadence, active count with graceful permission fallback (added November 2025)
+- **XSS Sanitization**: All external GitHub data (README summaries, CODEOWNERS) sanitized with bleach.clean() before storage
 - Rate limit monitoring (5,000 points/hour quota)
 - **Web UI Configuration**: `/github/sync/configuration` for token management and manual sync
 - **Progress Tracking**: Logs progress every 10 repositories during sync operations
@@ -162,8 +166,10 @@ python manage.py migrate_products_to_repositories
 Represents a GitHub repository with enrichment metadata (47 fields):
 - Core: `name`, `github_repo_id`, `github_url`, `product` (ForeignKey)
 - Activity: `last_commit_date`, `active_contributors_90d`, `days_since_last_commit`
-- Metadata: `readme_summary`, `primary_language`, `primary_framework`
-- Ownership: `codeowners_content`, `ownership_confidence`
+- **Activity Metrics** (November 2025): `commit_count`, `open_issues_count`, `open_pr_count`
+- **Webhook Health** (November 2025): `has_webhooks`, `active_webhooks_count`, `webhook_cadence`, `webhook_types` (JSONField)
+- Metadata: `readme_summary` (XSS sanitized), `primary_language`, `primary_framework`
+- Ownership: `codeowners_content` (XSS sanitized), `ownership_confidence`
 - 36 binary signals (has_dockerfile, has_ci_cd, has_kubernetes, etc.)
 - Alert metadata: `dependabot_alert_count`, `codeql_alert_count`, `secret_scanning_alert_count`
 - Tier: `tier` (tier1, tier2, tier3, tier4, archived)
