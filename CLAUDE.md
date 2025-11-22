@@ -219,7 +219,7 @@ class MyToolParser:
 
 ### GitHub Integration
 
-DefectDojo has four GitHub integration patterns:
+DefectDojo has five GitHub integration patterns:
 
 1. **Issue Tracking** (`dojo/github.py`) - Traditional GitHub issue creation/sync for findings
    - Uses PyGithub REST API
@@ -232,6 +232,8 @@ DefectDojo has four GitHub integration patterns:
    - Classifies repository tier/criticality (tier1-tier4, archived)
    - **GraphQL API v4 for bulk operations** (15-20x faster incremental syncs)
    - Automatic REST fallback for reliability
+   - Progress tracking: Logs every 10 repositories during sync operations
+   - Web UI: `/github/sync/configuration` for configuration and manual sync
    - Management command: `python manage.py sync_github_repositories`
    - See detailed documentation: dojo/github_collector/README_GRAPHQL.md
 
@@ -276,6 +278,12 @@ The alerts collector creates a data hierarchy: Product → Repository → GitHub
 - Alert types: Dependabot (GraphQL), CodeQL (REST), Secret Scanning (REST)
 - Finding integration: Automatic Test creation per alert type, state synchronization
 - Admin UI: Complete CRUD for Repository, GitHubAlert, GitHubAlertSync models
+- **Sync Configuration UI**: Web-based configuration at `/github/sync/configuration` (staff/superuser only)
+  - GitHub token management with validation (format check + API connectivity test)
+  - Account type selection (Organization or Personal Account)
+  - Auto-sync settings with schedule options (manual, hourly, daily, weekly)
+  - Manual sync trigger button with real-time status feedback
+  - Last sync timestamp and status display (success/failed with error details)
 
 **Product Migration (Phase 4 - January 2025):**
 - ProductMigrationWizard class provides clustering-based repository grouping
@@ -344,6 +352,14 @@ Tracks alert sync status per repository:
 - Statistics: `dependabot_alerts_fetched`, `codeql_alerts_fetched`, `secret_scanning_alerts_fetched`
 - Error tracking: `last_sync_error`, `last_sync_error_at`, `last_rate_limit_hit`
 - OneToOne relationship with Repository
+
+**GitHubSyncConfiguration Model** (`dojo/models.py`) - NEW (January 2025)
+Singleton configuration for GitHub repository synchronization:
+- Core fields: `github_token`, `account_type` (organization/user), `account_name`
+- Sync settings: `auto_sync_enabled`, `sync_schedule` (manual/hourly/daily/weekly), `incremental_sync`
+- Status tracking: `last_sync`, `last_sync_status`, `last_sync_error`
+- Singleton pattern: Only one configuration record exists (pk=1)
+- Associated view: `/github/sync/configuration` (staff/superuser only)
 
 **Test Types for GitHub Alerts:**
 Three new Test_Type records created automatically:
@@ -718,13 +734,19 @@ Located in `dojo/frontend/`:
 8. Navigation active state - Migrated from JavaScript to Django template logic
 9. Table color scheme - Unified violet accent across all DataTables
 10. Configure modal (GitHub Insights) - Fixed vanilla DOM manipulation
+11. **DataTable virtual scrolling row parity** (November 2025) - Fixed alternating row colors breaking with virtual scroll
+    - Changed from CSS `:nth-child(even)` to Alpine.js computed `.even-row` class binding
+    - Applied to findings_list_modern.html, engagements_modern.html, product_modern.html
 
 **Files Modified:**
 - `dojo/templates/base_modern.html` - Navigation active state pattern
 - `dojo/templates/dojo/dashboard_modern.html` - Card layout flexbox fix
 - `dojo/templates/dojo/github_insights_dashboard.html` - Modal and refresh functionality
-- `dojo/static/dojo/css/components/dataTable.css` - Violet accent, soft dark backgrounds
+- `dojo/static/dojo/css/components/dataTable.css` - Violet accent, soft dark backgrounds, virtual scroll fix
 - `dojo/static/dojo/js/github_insights_dashboard.js` - Configure modal, error handling
+- `dojo/templates/dojo/findings_list_modern.html` - Virtual scroll row parity fix
+- `dojo/templates/dojo/engagements_modern.html` - Virtual scroll row parity fix
+- `dojo/templates/dojo/product_modern.html` - Virtual scroll row parity fix
 
 **Validation:**
 - Playwright browser testing across 5 core pages
@@ -899,6 +921,45 @@ function hideConfigureModal() {
 - Soft dark (#1c2128) reduces eye strain
 - Aligns with 2025 UI/UX trends (GitHub, Linear, Vercel design systems)
 - Better visual hierarchy with subtle gradients
+
+**Pattern: DataTable Virtual Scrolling - Row Parity Computation**
+
+**Problem:** CSS `:nth-child(even)` selector breaks with virtual scrolling because it counts DOM position (1-20) rather than data index (100-120).
+
+**Solution:** Use Alpine.js computed class binding based on actual data index
+
+```html
+<!-- In template with virtual scrolling -->
+<template x-for="(row, index) in visibleData" :key="row.id">
+    <tr class="dd-table-row"
+        :class="{
+            'selected': isSelected(row.id),
+            'expanded': isExpanded(row.id),
+            'even-row': (startIndex + index) % 2 === 1
+        }">
+        <!-- Row content -->
+    </tr>
+</template>
+```
+
+```css
+/* In dataTable.css */
+.dd-table-row.even-row {
+    background: var(--dd-table-row-alt);
+}
+```
+
+**Technical Details:**
+- Virtual scrolling renders only visible rows (e.g., rows 100-120 of 1000)
+- DOM positions reset for each render (1-20), but data indices remain (100-120)
+- Computing `(startIndex + index) % 2 === 1` maintains consistent alternating row colors
+- `:nth-child()` CSS selectors DO NOT work with virtual scrolling - always use computed classes
+
+**Files Affected:**
+- `dojo/static/dojo/css/components/dataTable.css:229` - Removed `:nth-child(even)` rule
+- `dojo/templates/dojo/findings_list_modern.html:297` - Added `:class` binding
+- `dojo/templates/dojo/engagements_modern.html:294` - Added `:class` binding
+- `dojo/templates/dojo/product_modern.html:344` - Added `:class` binding
 
 ## Development Guidelines
 

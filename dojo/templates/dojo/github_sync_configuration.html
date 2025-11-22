@@ -1,0 +1,477 @@
+{% extends "base_modern.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block add_styles %}
+    {{ block.super }}
+    <style>
+        /* Configuration Page - Modern Aesthetic */
+        .config-header {
+            animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+        }
+
+        @keyframes headerReveal {
+            0% {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Config Form Panel with Glass Morphism */
+        .config-card {
+            background: rgba(28, 33, 40, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 32px;
+            margin-bottom: 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation-delay: 150ms;
+            opacity: 0;
+        }
+
+        @keyframes slideUp {
+            0% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .config-card h2 {
+            color: #F0F6FC;
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 24px;
+            letter-spacing: -0.01em;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #8b949e;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.005em;
+        }
+
+        .form-group .help-text {
+            display: block;
+            color: #6e7681;
+            font-size: 13px;
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        .form-control {
+            width: 100%;
+            background: #1c2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e6edf3;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 200ms ease;
+        }
+
+        .form-control:focus {
+            border-color: #8B5CF6;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .form-control[type="password"] {
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.1em;
+        }
+
+        /* Radio and Checkbox Styling */
+        .radio-group, .checkbox-group {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+        }
+
+        .radio-option, .checkbox-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .radio-option input[type="radio"],
+        .checkbox-option input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #8B5CF6;
+            cursor: pointer;
+        }
+
+        .radio-option label,
+        .checkbox-option label {
+            margin: 0;
+            color: #e6edf3;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* Select Styling */
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 40px;
+        }
+
+        select.form-control option {
+            background: #1c2128;
+            color: #e6edf3;
+        }
+
+        /* Button Styling */
+        .btn-primary {
+            background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%) !important;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 200ms ease;
+            font-weight: 600;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #e6edf3;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 200ms ease;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .status-badge.success {
+            background: rgba(46, 160, 67, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.2);
+        }
+
+        .status-badge.failed {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border: 1px solid rgba(248, 81, 73, 0.2);
+        }
+
+        .status-badge.partial {
+            background: rgba(187, 128, 9, 0.15);
+            color: #d29922;
+            border: 1px solid rgba(187, 128, 9, 0.2);
+        }
+
+        /* Info Section */
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #8b949e;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #e6edf3;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 16px;
+            margin-top: 32px;
+        }
+
+        /* Messages */
+        .alert {
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-success {
+            background: rgba(46, 160, 67, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.2);
+        }
+
+        .alert-error {
+            background: rgba(248, 81, 73, 0.15);
+            color: #f85149;
+            border: 1px solid rgba(248, 81, 73, 0.2);
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; margin: 40px auto;">
+    <!-- Header -->
+    <div class="config-header" style="margin-bottom: 32px;">
+        <h1 style="color: #F0F6FC; font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px;">
+            GitHub Sync Configuration
+        </h1>
+        <p style="color: #8b949e; font-size: 16px; font-weight: 500;">
+            Configure GitHub repository synchronization settings for automatic metadata collection
+        </p>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Configuration Form -->
+    <div class="config-card">
+        <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            Authentication & Account
+        </h2>
+
+        <form method="post" action="{% url 'github_sync_configuration' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="save_config">
+
+            <!-- GitHub Token -->
+            <div class="form-group">
+                <label for="github_token">GitHub Personal Access Token *</label>
+                <input type="password" id="github_token" name="github_token" class="form-control"
+                       value="{{ config.github_token }}" required
+                       placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <small class="help-text">
+                    GitHub PAT with <code>repo:read</code> and <code>read:org</code> permissions.
+                    Generate at: <a href="https://github.com/settings/tokens" target="_blank" style="color: #8B5CF6;">github.com/settings/tokens</a>
+                </small>
+            </div>
+
+            <!-- Account Type -->
+            <div class="form-group">
+                <label>Account Type *</label>
+                <div class="radio-group">
+                    {% for value, label in account_types %}
+                        <div class="radio-option">
+                            <input type="radio" id="account_type_{{ value }}" name="account_type"
+                                   value="{{ value }}" {% if config.account_type == value %}checked{% endif %} required>
+                            <label for="account_type_{{ value }}">{{ label }}</label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <small class="help-text">
+                    Organization: Sync all repos from a GitHub organization. Personal Account: Sync your owned repositories.
+                </small>
+            </div>
+
+            <!-- Account Name -->
+            <div class="form-group">
+                <label for="account_name">Account Name *</label>
+                <input type="text" id="account_name" name="account_name" class="form-control"
+                       value="{{ config.account_name }}" required
+                       placeholder="your-org-name or your-username">
+                <small class="help-text">
+                    GitHub organization name (e.g., "defectdojo") or personal account username (e.g., "john-doe")
+                </small>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.05); margin: 32px 0;">
+
+            <h2 style="margin-top: 32px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                Sync Schedule
+            </h2>
+
+            <!-- Auto-Sync Enabled -->
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="auto_sync_enabled" name="auto_sync_enabled"
+                               {% if config.auto_sync_enabled %}checked{% endif %}>
+                        <label for="auto_sync_enabled">Enable Automatic Synchronization</label>
+                    </div>
+                </div>
+                <small class="help-text">
+                    When enabled, repositories will sync automatically based on the schedule below
+                </small>
+            </div>
+
+            <!-- Sync Schedule -->
+            <div class="form-group">
+                <label for="sync_schedule">Sync Frequency</label>
+                <select id="sync_schedule" name="sync_schedule" class="form-control">
+                    {% for value, label in sync_schedules %}
+                        <option value="{{ value }}" {% if config.sync_schedule == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <small class="help-text">
+                    How often to automatically sync repositories when auto-sync is enabled
+                </small>
+            </div>
+
+            <!-- Incremental Sync -->
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <div class="checkbox-option">
+                        <input type="checkbox" id="incremental_sync" name="incremental_sync"
+                               {% if config.incremental_sync %}checked{% endif %}>
+                        <label for="incremental_sync">Incremental Sync (Recommended)</label>
+                    </div>
+                </div>
+                <small class="help-text">
+                    Only sync repositories updated since last sync. Dramatically reduces sync time for large organizations.
+                </small>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button type="submit" class="btn-primary">
+                    Save Configuration
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Sync Status -->
+    <div class="config-card" style="animation-delay: 300ms;">
+        <h2>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            Sync Status & Statistics
+        </h2>
+
+        {% if config.last_sync_status %}
+            <div class="status-badge {{ config.last_sync_status }}">
+                {% if config.last_sync_status == 'success' %}✓{% elif config.last_sync_status == 'failed' %}✗{% else %}⚠{% endif %}
+                Last Sync: {{ config.last_sync_status|title }}
+            </div>
+        {% endif %}
+
+        <div class="info-row">
+            <span class="info-label">Last Sync Time</span>
+            <span class="info-value">
+                {% if config.last_sync %}
+                    {{ config.last_sync|date:"Y-m-d H:i:s" }}
+                {% else %}
+                    Never synced
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="info-row">
+            <span class="info-label">Total Repositories Synced</span>
+            <span class="info-value">{{ config.total_repos_synced }}</span>
+        </div>
+
+        {% if config.last_sync_error %}
+            <div class="info-row" style="border: none; margin-top: 16px;">
+                <div style="width: 100%;">
+                    <span class="info-label" style="display: block; margin-bottom: 8px;">Last Error</span>
+                    <div style="background: rgba(248, 81, 73, 0.1); border: 1px solid rgba(248, 81, 73, 0.2); border-radius: 6px; padding: 12px; color: #f85149; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6;">
+                        {{ config.last_sync_error }}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+        <!-- Manual Sync Button -->
+        <form method="post" action="{% url 'github_sync_configuration' %}" style="margin-top: 24px;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="trigger_sync">
+            <button type="submit" class="btn-secondary"
+                    {% if not config.github_token or not config.account_name %}disabled{% endif %}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <polyline points="1 20 1 14 7 14"/>
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Trigger Manual Sync Now
+            </button>
+            {% if not config.github_token or not config.account_name %}
+                <small class="help-text" style="display: block; margin-top: 8px;">
+                    Configure GitHub token and account name to enable manual sync
+                </small>
+            {% endif %}
+        </form>
+    </div>
+</div>
+{% endblock %}

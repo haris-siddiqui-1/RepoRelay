@@ -169,10 +169,54 @@
                     <input type="text" placeholder="{% trans 'Search findings...' %}" @input="search($event.target.value)">
                 </div>
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-4">
                 <span class="text-sm text-enterprise-text-secondary">
                     <span x-text="filteredData.length"></span> {% trans "findings" %}
                 </span>
+
+                <!-- Column Customizer Button -->
+                <div class="relative">
+                    <button class="dd-column-customizer-btn"
+                            @click="showColumnCustomizer = !showColumnCustomizer"
+                            @click.outside="showColumnCustomizer = false">
+                        <svg viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M1.75 2.5a.75.75 0 0 0 0 1.5h12.5a.75.75 0 0 0 0-1.5H1.75zm0 5a.75.75 0 0 0 0 1.5h12.5a.75.75 0 0 0 0-1.5H1.75zm0 5a.75.75 0 0 0 0 1.5h12.5a.75.75 0 0 0 0-1.5H1.75z"/>
+                        </svg>
+                        {% trans "Customize Columns" %}
+                    </button>
+
+                    <!-- Column Customizer Dropdown -->
+                    <div class="dd-column-customizer"
+                         x-show="showColumnCustomizer"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-150"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         @click.outside="showColumnCustomizer = false">
+
+                        <div class="dd-column-customizer-header">
+                            <span class="dd-column-customizer-title">{% trans "Column Options" %}</span>
+                            <button class="dd-column-customizer-reset"
+                                    @click="resetColumnPreferences()">
+                                {% trans "Reset" %}
+                            </button>
+                        </div>
+
+                        <div class="dd-column-customizer-list">
+                            <template x-for="col in getOrderedColumns()" :key="col.key">
+                                <div class="dd-column-customizer-item">
+                                    <input type="checkbox"
+                                           :id="'col-toggle-' + col.key"
+                                           :checked="isColumnVisible(col.key)"
+                                           @change="toggleColumnVisibility(col.key)">
+                                    <label :for="'col-toggle-' + col.key" x-text="col.label"></label>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -189,11 +233,17 @@
                                    aria-label="{% trans 'Select all' %}">
                         </th>
                         <th style="width: 40px;"></th>
-                        <template x-for="col in columns" :key="col.key">
+                        <template x-for="col in getVisibleColumns()" :key="col.key">
                             <th class="sortable"
-                                :class="{ 'sorted': sortColumn === col.key }"
+                                :class="{ 'sorted': sortColumn === col.key, 'column-hidden': !isColumnVisible(col.key) }"
+                                :style="getColumnWidth(col.key) ? 'width: ' + getColumnWidth(col.key) + 'px' : ''"
                                 @click="sort(col.key)"
-                                :aria-sort="sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'">
+                                :aria-sort="sortColumn === col.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'"
+                                draggable="true"
+                                @dragstart="startColumnDrag(col.key, $event)"
+                                @dragover="onColumnDragOver($event)"
+                                @drop="dropColumn(col.key, $event)"
+                                @dragend="onColumnDragEnd($event)">
                                 <span x-text="col.label"></span>
                                 <span class="dd-sort-icon">
                                     <template x-if="sortColumn !== col.key">
@@ -212,6 +262,10 @@
                                         </svg>
                                     </template>
                                 </span>
+                                <!-- Resize Handle -->
+                                <div class="dd-column-resize-handle"
+                                     @mousedown.stop="startResize(col.key, $event)">
+                                </div>
                             </th>
                         </template>
                         <th>{% trans "Actions" %}</th>
@@ -239,7 +293,8 @@
                                         :class="{
                                             'selected': isSelected(row.id),
                                             'expanded': isExpanded(row.id),
-                                            'focused': focusedRowIndex === startIndex + index
+                                            'focused': focusedRowIndex === startIndex + index,
+                                            'even-row': (startIndex + index) % 2 === 1
                                         }">
 
                                         <!-- Checkbox -->
@@ -264,12 +319,14 @@
                                         </td>
 
                                         <!-- Data Cells -->
-                                        <template x-for="col in columns" :key="col.key">
+                                        <template x-for="col in getVisibleColumns()" :key="col.key">
                                             <td class="dd-table-cell"
                                                 :class="{
                                                     'monospace': ['id', 'cwe'].includes(col.key),
-                                                    'truncate': col.key === 'title'
+                                                    'truncate': col.key === 'title',
+                                                    'column-hidden': !isColumnVisible(col.key)
                                                 }"
+                                                :style="getColumnWidth(col.key) ? 'width: ' + getColumnWidth(col.key) + 'px' : ''"
                                                 :title="row[col.key]"
                                                 @click="if (col.key === 'title') window.location.href = '/finding/' + row.id">
 

@@ -1,0 +1,146 @@
+# User-Level Batch Query
+# Purpose: Fetch multiple repositories from a personal account in single query
+# Mirrors organization_batch.graphql but for personal accounts
+# Reference: https://docs.github.com/en/graphql/reference/objects#user
+
+query GetUserRepositories($login: String!, $cursor: String) {
+  user(login: $login) {
+
+    # Fetch 100 repositories per page
+    # RATIONALE: Balance between query size and number of API calls
+    repositories(first: 100, after: $cursor, orderBy: {field: UPDATED_AT, direction: DESC}, ownerAffiliations: [OWNER]) {
+
+      # Pagination info
+      pageInfo {
+        hasNextPage      # Whether more pages exist
+        endCursor        # Cursor for next page
+      }
+
+      # Total count of all repos for this user
+      totalCount
+
+      # Repository nodes with nested data
+      nodes {
+        # ===== BASIC METADATA =====
+        name
+        nameWithOwner
+        description
+        url
+        databaseId
+        isArchived
+        updatedAt          # Last update timestamp (for incremental sync)
+        diskUsage
+
+        primaryLanguage {
+          name
+        }
+
+        # ===== COMMIT HISTORY (REDUCED) =====
+        # OPTIMIZATION: Fetch only 20 commits to reduce query cost
+        # TRADEOFF: May not cover full 90 days, but reduces cost significantly
+        defaultBranchRef {
+          name
+          target {
+            ... on Commit {
+              committedDate
+              history(first: 20) {
+                totalCount
+                nodes {
+                  committedDate
+                  author {
+                    name
+                    email
+                    user { login }
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        # ===== FILE TREE =====
+        # ⚠️ WARNING: Fetching tree for 100 repos may timeout or exceed size limits
+        # STRATEGY: Only fetch top-level entries, not full recursive tree
+        tree: object(expression: "HEAD:") {
+          ... on Tree {
+            entries {
+              name
+              path
+              type
+            }
+          }
+        }
+
+        # ===== SPECIFIC FILES =====
+        # NOTE: Fetching 4 files × 100 repos = 400 file reads per query
+        # This may be expensive - consider skipping or fetching only if needed
+        codeowners1: object(expression: "HEAD:CODEOWNERS") {
+          ... on Blob { text }
+        }
+        codeowners2: object(expression: "HEAD:.github/CODEOWNERS") {
+          ... on Blob { text }
+        }
+        codeowners3: object(expression: "HEAD:docs/CODEOWNERS") {
+          ... on Blob { text }
+        }
+        readme: object(expression: "HEAD:README.md") {
+          ... on Blob { text }
+        }
+
+        # ===== GITHUB SETTINGS (LIGHTWEIGHT) =====
+        environments(first: 1) { totalCount }
+        releases(first: 3, orderBy: {field: CREATED_AT, direction: DESC}) {
+          totalCount
+          nodes {
+            createdAt
+            tagName
+          }
+        }
+        branchProtectionRules(first: 1) { totalCount }
+        pullRequests(first: 5, states: [OPEN, MERGED], orderBy: {field: UPDATED_AT, direction: DESC}) {
+          totalCount
+          nodes {
+            state
+            updatedAt
+            createdAt
+            author { login }
+          }
+        }
+        vulnerabilityAlerts(first: 1) { totalCount }
+        issues(first: 1, states: [OPEN]) { totalCount }
+      }
+    }
+  }
+
+  # Rate limit monitoring
+  rateLimit {
+    cost
+    remaining
+    resetAt
+  }
+}
+
+# ===== USAGE PATTERN =====
+#
+# 1. First call: cursor = null
+#    Fetches first 100 repos
+#
+# 2. Check pageInfo.hasNextPage
+#    If true, make next call with cursor = pageInfo.endCursor
+#
+# 3. Repeat until hasNextPage = false
+#
+# ===== DIFFERENCES FROM ORGANIZATION QUERY =====
+#
+# - Uses `user(login:)` instead of `organization(login:)`
+# - Adds `ownerAffiliations: [OWNER]` to filter only owned repos
+#   (excludes collaborated repos, forked repos that user doesn't own)
+# - Otherwise identical structure for consistency
+#
+# ===== INCREMENTAL SYNC OPTIMIZATION =====
+#
+# For daily syncs, only process repos where:
+#   updatedAt > repository.updated (Django model timestamp)
+#
+# Typical daily changes: 1-10 repos for personal accounts
+# This makes daily syncs fast (<1 minute) even if full sync is slow.

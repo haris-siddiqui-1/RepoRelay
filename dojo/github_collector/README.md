@@ -50,13 +50,23 @@ dojo/github_collector/
 - 36 binary signals across 5 categories (deployment, production, development, organization, security)
 - Repository tier/criticality classification (tier1-tier4, archived)
 - Rate limit monitoring (5,000 points/hour quota)
+- **Web UI Configuration**: `/github/sync/configuration` for token management and manual sync
+- **Progress Tracking**: Logs progress every 10 repositories during sync operations
 
 **Management Command**:
 ```bash
 python manage.py sync_github_repositories --incremental
 ```
 
-**Documentation**: See [README_GRAPHQL.md](./README_GRAPHQL.md) and [GRAPHQL_VERIFICATION.md](./GRAPHQL_VERIFICATION.md)
+**Web UI**: Navigate to `/github/sync/configuration` (staff/superuser only) for:
+- GitHub token configuration with validation
+- Account type selection (Organization or Personal Account)
+- Auto-sync settings and schedule configuration
+- Manual sync trigger with real-time status feedback
+
+**Documentation**:
+- Implementation details: [README_GRAPHQL.md](./README_GRAPHQL.md) and [GRAPHQL_VERIFICATION.md](./GRAPHQL_VERIFICATION.md)
+- Web UI guide: [README_SYNC_UI.md](./README_SYNC_UI.md)
 
 ## 2. Security Alerts Collection
 
@@ -279,6 +289,7 @@ python manage.py generate_insights --insight my_insight
 
 - [CLAUDE.md](../../CLAUDE.md) - Main project documentation
 - [README_GRAPHQL.md](./README_GRAPHQL.md) - GraphQL migration details
+- [README_SYNC_UI.md](./README_SYNC_UI.md) - Web UI configuration guide (NEW)
 - [README_ALERTS.md](./README_ALERTS.md) - Security alerts integration
 - [ARCHITECTURE_DECISION.md](./ARCHITECTURE_DECISION.md) - GraphQL migration decision
 - [PHASE4_VALIDATION_REPORT.md](../../PHASE4_VALIDATION_REPORT.md) - Product migration validation

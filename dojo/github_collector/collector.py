@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 from github import Auth, Github, GithubException
 
-from dojo.models import Product, GITHUB_Conf, GITHUB_PKey
+from dojo.models import Product, Repository, GITHUB_Conf, GITHUB_PKey
 from .signal_detector import SignalDetector
 from .tier_classifier import TierClassifier
 from .readme_summarizer import ReadmeSummarizer
@@ -125,27 +125,62 @@ class GitHubRepositoryCollector:
                     updated_since = most_recent.updated
                     logger.info(f"Incremental sync: fetching repos updated after {updated_since}")
 
-            # Fetch repositories from organization (with incremental filtering)
-            repos_data = self.graphql_client.get_organization_repositories(
-                org=self.github_org,
-                updated_since=updated_since
-            )
+            # Fetch repositories - try organization first, then user account
+            repos_data = []
+            account_type = None
+
+            # Try organization first
+            try:
+                logger.info(f"Attempting to fetch as organization: {self.github_org}")
+                repos_data = self.graphql_client.get_organization_repositories(
+                    org=self.github_org,
+                    updated_since=updated_since
+                )
+                if repos_data:
+                    account_type = "organization"
+                    logger.info(f"Successfully fetched {len(repos_data)} repos as organization")
+            except Exception as org_error:
+                logger.info(f"Organization query failed: {org_error}")
+
+            # If organization returned no repos or failed, try user account
+            if not repos_data:
+                try:
+                    logger.info(f"Attempting to fetch as user account: {self.github_org}")
+                    repos_data = self.graphql_client.get_user_repositories(
+                        login=self.github_org,
+                        updated_since=updated_since
+                    )
+                    if repos_data:
+                        account_type = "user"
+                        logger.info(f"Successfully fetched {len(repos_data)} repos as user")
+                except Exception as user_error:
+                    logger.error(f"User query also failed: {user_error}")
+
+            if not repos_data:
+                logger.warning(f"No repositories found for '{self.github_org}' as either organization or user")
 
             stats['total_repos'] = len(repos_data)
-            logger.info(f"Fetched {len(repos_data)} repositories from GraphQL")
+            logger.info(f"Fetched {len(repos_data)} repositories from GraphQL ({account_type or 'unknown'})")
 
             # Process each repository with GraphQL data
-            for repo_data in repos_data:
+            for index, repo_data in enumerate(repos_data, start=1):
+                repo_name = repo_data.get('nameWithOwner', 'unknown')
+
                 try:
+                    # Log progress every 10 repos or for small batches
+                    if index % 10 == 0 or index == len(repos_data) or len(repos_data) <= 20:
+                        logger.info(f"Progress: {index}/{len(repos_data)} repositories processed")
+
                     was_created = self._sync_repository_from_graphql(repo_data)
 
                     if was_created:
                         stats['created'] += 1
+                        logger.debug(f"Created repository: {repo_name}")
                     else:
                         stats['updated'] += 1
+                        logger.debug(f"Updated repository: {repo_name}")
 
                 except Exception as e:
-                    repo_name = repo_data.get('nameWithOwner', 'unknown')
                     logger.error(f"Error syncing repository {repo_name}: {e}", exc_info=True)
                     stats['errors'] += 1
 
@@ -178,9 +213,14 @@ class GitHubRepositoryCollector:
                 stats['total_repos'] += 1
 
                 try:
+                    # Log progress every 10 repos
+                    if stats['total_repos'] % 10 == 0:
+                        logger.info(f"Progress: {stats['total_repos']} repositories processed so far")
+
                     # Check if should skip (incremental mode)
                     if incremental and self._should_skip_repo(repo):
                         stats['skipped'] += 1
+                        logger.debug(f"Skipped repository: {repo.full_name}")
                         continue
 
                     # Sync repository
@@ -188,8 +228,10 @@ class GitHubRepositoryCollector:
 
                     if was_created:
                         stats['created'] += 1
+                        logger.debug(f"Created repository: {repo.full_name}")
                     else:
                         stats['updated'] += 1
+                        logger.debug(f"Updated repository: {repo.full_name}")
 
                 except Exception as e:
                     logger.error(f"Error syncing repository {repo.full_name}: {e}", exc_info=True)
@@ -316,8 +358,12 @@ class GitHubRepositoryCollector:
         # Summarize README from GraphQL data
         readme_data = self._summarize_readme_from_graphql(repo_data)
 
-        # Update Product with collected data
+        # Update Product and Repository with collected data
         with transaction.atomic():
+            # Create or update Repository record (new architecture)
+            repository, repo_created = self._get_or_create_repository_from_graphql(
+                repo_data, product, metadata, signals, readme_data, classification
+            )
             # Repository activity
             product.last_commit_date = metadata['last_commit_date']
             product.active_contributors_90d = metadata['active_contributors_90d']
@@ -739,6 +785,117 @@ class GitHubRepositoryCollector:
 
             logger.info(f"Created new Product: {product_name}")
             return product, True
+
+    def _get_or_create_repository_from_graphql(
+        self,
+        repo_data: dict,
+        product: Product,
+        metadata: dict,
+        signals: dict,
+        readme_data: dict,
+        classification: dict
+    ) -> tuple:
+        """
+        Get or create Repository from GraphQL data with enrichment fields.
+
+        Args:
+            repo_data: Parsed GraphQL repository data
+            product: Product instance to link to
+            metadata: Extracted metadata dictionary
+            signals: Binary signals dictionary (36 fields)
+            readme_data: README summary data
+            classification: Tier classification data
+
+        Returns:
+            Tuple of (Repository, created_bool)
+        """
+        github_repo_id = repo_data.get('databaseId')
+        repo_name = repo_data.get('nameWithOwner')
+
+        if not github_repo_id:
+            logger.warning(f"Repository {repo_name} missing github_repo_id - skipping Repository creation")
+            return None, False
+
+        # Calculate tier
+        tier = classification['tier']
+        if tier == 'archived' or repo_data.get('isArchived'):
+            tier = Repository.ARCHIVED
+        elif tier == 'tier1':
+            tier = Repository.TIER1
+        elif tier == 'tier2':
+            tier = Repository.TIER2
+        elif tier == 'tier3':
+            tier = Repository.TIER3
+        else:
+            tier = Repository.TIER4
+
+        # Prepare defaults for update_or_create
+        defaults = {
+            'name': repo_name,
+            'product': product,
+            'github_url': repo_data.get('url', ''),
+
+            # Activity tracking
+            'last_commit_date': metadata['last_commit_date'],
+            'active_contributors_90d': metadata['active_contributors_90d'],
+            'days_since_last_commit': metadata['days_since_last_commit'],
+
+            # Repository metadata
+            'readme_summary': readme_data['summary'],
+            'readme_length': readme_data['length'],
+            'primary_language': readme_data['primary_language'] or repo_data.get('primaryLanguage') or '',
+            'primary_framework': readme_data['primary_framework'],
+
+            # Ownership
+            'codeowners_content': metadata['codeowners_content'],
+            'ownership_confidence': metadata['ownership_confidence'],
+
+            # Tier classification
+            'tier': tier,
+
+            # All 36 binary signals
+            'has_dockerfile': signals.get('has_dockerfile', False),
+            'has_kubernetes_config': signals.get('has_kubernetes_config', False),
+            'has_ci_cd': signals.get('has_ci_cd', False),
+            'has_terraform': signals.get('has_terraform', False),
+            'has_deployment_scripts': signals.get('has_deployment_scripts', False),
+            'has_procfile': signals.get('has_procfile', False),
+            'has_environments': signals.get('has_environments', False),
+            'has_releases': signals.get('has_releases', False),
+            'has_branch_protection': signals.get('has_branch_protection', False),
+            'has_monitoring_config': signals.get('has_monitoring_config', False),
+            'has_ssl_config': signals.get('has_ssl_config', False),
+            'has_database_migrations': signals.get('has_database_migrations', False),
+            'recent_commits_30d': signals.get('recent_commits_30d', False),
+            'active_prs_30d': signals.get('active_prs_30d', False),
+            'multiple_contributors': signals.get('multiple_contributors', False),
+            'has_dependabot_activity': signals.get('has_dependabot_activity', False),
+            'recent_releases_90d': signals.get('recent_releases_90d', False),
+            'consistent_commit_pattern': signals.get('consistent_commit_pattern', False),
+            'has_tests': signals.get('has_tests', False),
+            'has_documentation': signals.get('has_documentation', False),
+            'has_api_specs': signals.get('has_api_specs', False),
+            'has_codeowners': signals.get('has_codeowners', False),
+            'has_security_md': signals.get('has_security_md', False),
+            'is_monorepo': signals.get('is_monorepo', False),
+            'has_security_scanning': signals.get('has_security_scanning', False),
+            'has_secret_scanning': signals.get('has_secret_scanning', False),
+            'has_dependency_scanning': signals.get('has_dependency_scanning', False),
+            'has_gitleaks_config': signals.get('has_gitleaks_config', False),
+            'has_sast_config': signals.get('has_sast_config', False),
+        }
+
+        repository, created = Repository.objects.update_or_create(
+            github_repo_id=github_repo_id,
+            defaults=defaults
+        )
+
+        if created:
+            logger.info(f"Created new Repository: {repo_name} (ID: {github_repo_id})")
+        else:
+            logger.info(f"Updated Repository: {repo_name} (ID: {github_repo_id})")
+
+        return repository, created
 
     def _extract_metadata_from_graphql(self, repo_data: dict) -> dict:
         """

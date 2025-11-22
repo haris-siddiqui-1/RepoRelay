@@ -69,6 +69,12 @@
     border-radius: 12px;
     overflow: hidden;
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.3),
+        0 2px 4px -2px rgba(0, 0, 0, 0.2),
+        0 0 0 1px rgba(139, 92, 246, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 
 .dd-table-scroll-container {
@@ -76,6 +82,7 @@
     overflow-x: auto;
     max-height: 600px;
     position: relative;
+    background: var(--dd-table-bg);
 }
 
 /* Custom Scrollbar */
@@ -124,6 +131,7 @@
     display: table;
     table-layout: fixed;
     width: 100%;
+    background: var(--dd-table-bg);
 }
 
 /* ============================================
@@ -132,9 +140,10 @@
 
 .dd-table-header {
     background: var(--dd-table-header-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--dd-table-border);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(139, 92, 246, 0.15);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 /* Header table is fixed above scroll container */
@@ -158,15 +167,28 @@
 /* Sortable Column */
 .dd-table-header th.sortable {
     cursor: pointer;
-    transition: color var(--dd-table-transition);
+    transition: all var(--dd-table-transition);
+    position: relative;
 }
 
 .dd-table-header th.sortable:hover {
     color: var(--dd-table-text);
+    background: rgba(139, 92, 246, 0.05);
 }
 
 .dd-table-header th.sorted {
     color: var(--dd-table-accent);
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.dd-table-header th.sorted::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--dd-table-accent), transparent);
 }
 
 /* Sort Icons */
@@ -199,17 +221,20 @@
 .dd-table-row {
     height: var(--dd-table-row-height);
     border-bottom: 1px solid var(--dd-table-border);
+    background: var(--dd-table-bg);
     transition: background-color var(--dd-table-transition);
 }
 
 /* Alternating rows - subtle 2% opacity */
-.dd-table-row:nth-child(even) {
+.dd-table-row.even-row {
     background: var(--dd-table-row-alt);
 }
 
 /* Hover state */
 .dd-table-row:hover {
     background: var(--dd-table-row-hover);
+    transform: scale(1.001);
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.08);
 }
 
 /* Selected state */
@@ -289,26 +314,41 @@
 .dd-severity-badge.critical {
     background: rgba(248, 81, 73, 0.15);
     color: var(--dd-severity-critical);
+    box-shadow:
+        0 0 12px rgba(248, 81, 73, 0.2),
+        0 0 0 1px rgba(248, 81, 73, 0.2);
 }
 
 .dd-severity-badge.high {
     background: rgba(240, 136, 62, 0.15);
     color: var(--dd-severity-high);
+    box-shadow:
+        0 0 12px rgba(240, 136, 62, 0.15),
+        0 0 0 1px rgba(240, 136, 62, 0.2);
 }
 
 .dd-severity-badge.medium {
     background: rgba(210, 153, 34, 0.15);
     color: var(--dd-severity-medium);
+    box-shadow:
+        0 0 12px rgba(210, 153, 34, 0.12),
+        0 0 0 1px rgba(210, 153, 34, 0.2);
 }
 
 .dd-severity-badge.low {
     background: rgba(63, 185, 80, 0.15);
     color: var(--dd-severity-low);
+    box-shadow:
+        0 0 12px rgba(63, 185, 80, 0.12),
+        0 0 0 1px rgba(63, 185, 80, 0.2);
 }
 
 .dd-severity-badge.info {
     background: rgba(88, 166, 255, 0.15);
     color: var(--dd-severity-info);
+    box-shadow:
+        0 0 12px rgba(88, 166, 255, 0.12),
+        0 0 0 1px rgba(88, 166, 255, 0.2);
 }
 
 /* ============================================
@@ -328,16 +368,23 @@
 .dd-status-badge.active {
     background: rgba(63, 185, 80, 0.15);
     color: var(--dd-severity-low);
+    box-shadow:
+        0 0 8px rgba(63, 185, 80, 0.1),
+        0 0 0 1px rgba(63, 185, 80, 0.15);
 }
 
 .dd-status-badge.inactive {
     background: rgba(125, 133, 144, 0.15);
     color: var(--dd-table-text-muted);
+    box-shadow: 0 0 0 1px rgba(125, 133, 144, 0.15);
 }
 
 .dd-status-badge.verified {
     background: rgba(139, 92, 246, 0.15);
     color: var(--dd-table-accent);
+    box-shadow:
+        0 0 8px rgba(139, 92, 246, 0.1),
+        0 0 0 1px rgba(139, 92, 246, 0.15);
 }
 
 /* ============================================
@@ -732,4 +779,180 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+}
+
+/* ============================================
+   COLUMN CUSTOMIZATION
+   ============================================ */
+
+/* Column Resize Handle */
+.dd-column-resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    user-select: none;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dd-column-resize-handle::before {
+    content: '';
+    width: 2px;
+    height: 60%;
+    background: transparent;
+    transition: background-color var(--dd-table-transition);
+}
+
+.dd-column-resize-handle:hover::before,
+.dd-column-resize-handle:active::before {
+    background: var(--dd-table-accent);
+}
+
+/* Global cursor during resize */
+body.col-resizing,
+body.col-resizing * {
+    cursor: col-resize !important;
+    user-select: none !important;
+}
+
+/* Column Customizer Button */
+.dd-column-customizer-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--dd-table-bg);
+    border: 1px solid var(--dd-table-border);
+    border-radius: 6px;
+    color: var(--dd-table-text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--dd-table-transition);
+}
+
+.dd-column-customizer-btn:hover {
+    border-color: var(--dd-table-accent);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.dd-column-customizer-btn svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* Column Customizer Dropdown */
+.dd-column-customizer {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 8px;
+    background: var(--dd-table-card-bg);
+    border: 1px solid var(--dd-table-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    min-width: 250px;
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.dd-column-customizer-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--dd-table-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.dd-column-customizer-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--dd-table-text);
+}
+
+.dd-column-customizer-reset {
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid var(--dd-table-border);
+    border-radius: 4px;
+    color: var(--dd-table-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--dd-table-transition);
+}
+
+.dd-column-customizer-reset:hover {
+    color: var(--dd-table-text);
+    border-color: var(--dd-table-accent);
+}
+
+.dd-column-customizer-list {
+    padding: 8px 0;
+}
+
+.dd-column-customizer-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: background-color var(--dd-table-transition);
+}
+
+.dd-column-customizer-item:hover {
+    background: var(--dd-table-row-hover);
+}
+
+.dd-column-customizer-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--dd-table-accent);
+}
+
+.dd-column-customizer-item label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--dd-table-text);
+    cursor: pointer;
+    user-select: none;
+}
+
+.dd-column-customizer-drag-handle {
+    width: 16px;
+    height: 16px;
+    color: var(--dd-table-text-muted);
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.dd-column-customizer-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Column Drag and Drop */
+.dd-table-header th[draggable="true"] {
+    cursor: move;
+}
+
+.dd-table-header th.dragging {
+    opacity: 0.5;
+    background: var(--dd-table-accent);
+}
+
+.dd-table-header th.drag-over {
+    border-left: 2px solid var(--dd-table-accent);
+}
+
+/* Hidden Column */
+.dd-table-header th.column-hidden,
+.dd-table-body td.column-hidden {
+    display: none;
 }
