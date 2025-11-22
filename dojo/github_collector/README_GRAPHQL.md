@@ -28,8 +28,13 @@ The GitHub collector has been migrated from REST API v3 to GraphQL API v4 for im
 2. **`collector.py`** (Enhanced) - Repository sync orchestrator
    - GraphQL support with `use_graphql=True` parameter
    - Automatic REST fallback on errors
+   - **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
+   - **REST Sync Path**: `_get_or_create_repository_from_rest()` mirrors GraphQL path for individual repository syncs (fixed November 2025)
+   - **GraphQL Sync Path**: `_get_or_create_repository_from_graphql()` handles bulk organization syncs
    - Incremental sync logic (only fetch changed repos)
    - All 36 binary signal detection from GraphQL data
+   - **XSS Sanitization**: bleach.clean() applied to README summaries and CODEOWNERS content
+   - **Webhook Collection**: Integrated webhook health monitoring with graceful permission fallback
 
 3. **`queries/`** - GraphQL query templates
    - `repository_full.graphql` - Complete single-repo query (~40 points)
@@ -264,6 +269,8 @@ GitHub users can hide email addresses:
 - ✅ Can switch between GraphQL and REST with `use_graphql` parameter
 - ✅ Individual product sync still uses REST (real-time updates)
 - ✅ All 36 binary signals produce identical results
+- ✅ **Dual-Population Strategy**: Both GraphQL and REST paths populate Repository + Product models identically (fixed November 2025)
+- ✅ **REST Sync Parity**: REST path now mirrors GraphQL path with full enrichment field population (collector.py:930-1050)
 
 ### Performance Comparison
 
@@ -281,6 +288,77 @@ GitHub users can hide email addresses:
 - REST fallback ensures zero downtime
 - Can opt-out with `--use-rest` flag
 - All APIs remain unchanged
+
+## Data Integrity & Security
+
+### Dual-Population Strategy (November 2025)
+
+Both GraphQL and REST sync paths now populate data to **both** Repository and Product models:
+
+**Why Dual-Population?**
+- **Repository Model**: Primary storage for GitHub enrichment data (47 fields)
+- **Product Model**: Legacy compatibility for existing DefectDojo workflows
+- **Data Consistency**: Ensures both models stay synchronized during sync operations
+
+**Implementation Details:**
+- GraphQL path: `_get_or_create_repository_from_graphql()` (collector.py:820-928)
+- REST path: `_get_or_create_repository_from_rest()` (collector.py:930-1050)
+- Both methods use `update_or_create()` with `github_repo_id` unique constraint
+- Transaction-safe operations with atomic database updates
+
+### XSS Sanitization (November 2025)
+
+All user-controlled GitHub data is sanitized before storage to prevent stored XSS vulnerabilities:
+
+**Sanitized Fields:**
+- `readme_summary` - README content extracted from repository
+- `codeowners_content` - CODEOWNERS file content
+
+**Sanitization Method:**
+```python
+import bleach
+readme_summary = bleach.clean(text, tags=[], strip=True)
+```
+
+**Applied At:**
+- GraphQL path: collector.py lines 874, 880
+- REST path: collector.py lines 996, 1002
+
+**Security Rationale:**
+External API data (GitHub) is user-controlled and must be sanitized before database storage to prevent malicious content from being rendered in DefectDojo UI.
+
+### Webhook Health Monitoring (November 2025)
+
+Webhook collection is integrated into both sync paths with graceful error handling:
+
+**Collected Metrics:**
+- `has_webhooks` (Boolean) - Whether repository has any webhooks configured
+- `active_webhooks_count` (Integer) - Count of active webhooks
+- `webhook_cadence` (String) - Delivery frequency (Hourly/Daily/Weekly/Monthly/Inactive)
+- `webhook_types` (JSONField) - Array of detected webhook integration types
+
+**Permission Requirements:**
+- Requires `admin:repo_hook` scope on GitHub Personal Access Token
+- Gracefully falls back to safe defaults if permission missing
+
+**Error Handling:**
+```python
+try:
+    webhook_metadata = self._collect_webhook_metadata(repo.full_name)
+    metadata.update(webhook_metadata)
+except Exception as e:
+    logger.warning(f"Could not fetch webhook metadata: {e}")
+    metadata.update({
+        'has_webhooks': False,
+        'active_webhooks_count': 0,
+        'webhook_cadence': 'Unknown',
+        'webhook_types': []
+    })
+```
+
+**Integration Point:**
+- REST path: collector.py lines 525-536 in `_collect_repository_metadata()`
+- GraphQL path: Already integrated (no changes needed)
 
 ## Troubleshooting
 

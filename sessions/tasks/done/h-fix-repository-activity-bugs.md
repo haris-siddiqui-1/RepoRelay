@@ -1,11 +1,12 @@
 ---
-status: pending
+status: completed
 created: 2025-11-22
 priority: critical
 estimated_effort: 2-3 hours
 index: phase4-migration
 parent_task: h-validate-repository-activity-implementation.md
 branch: fix/repository-activity-data-population
+completed: 2025-11-22
 ---
 
 # Fix Repository Activity & Webhook Health Data Population Bugs
@@ -360,3 +361,23 @@ Admin UI Screenshots:
 3. Add webhook collection integration
 4. Re-run validation phases 4-8 with fixed code
 5. Update parent validation task with results
+
+### 2025-11-22 - Bugs Fixed Successfully
+
+**Task Completion**: Merged into h-fix-validate-repository-activity.md
+
+**All Bugs Fixed**: ✅ COMPLETE
+- ✅ Bug #1: Repository creation in REST sync path implemented (125-line method at collector.py:916-1036)
+- ✅ Bug #2: Webhook collection integrated (collector.py:525-536)
+- ✅ Bug #3: Dual-population strategy adopted (saves to both Product and Repository models)
+
+**Validation Results**:
+- Repository table now populated: RepoRelay=13,232 commits, CapabilityMatrix=8 commits
+- Product table still populated: Same values (backwards compatibility maintained)
+- 100% data integrity between both models
+- 0 exceptions or crashes during sync
+- Webhook fields populated with graceful defaults for repos without webhooks
+
+**Actual Fix Time**: ~2 hours (as estimated)
+
+**See**: h-fix-validate-repository-activity.md for complete implementation details and comprehensive test results

@@ -230,8 +230,12 @@ DefectDojo has five GitHub integration patterns:
    - Syncs repository metadata to Repository model (separate from Product)
    - Detects 36 binary signals (deployment indicators, security posture, activity metrics)
    - Classifies repository tier/criticality (tier1-tier4, archived)
+   - **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
    - **GraphQL API v4 for bulk operations** (15-20x faster incremental syncs)
+   - **REST API path**: Individual repository syncs with full enrichment field population (fixed November 2025)
    - Automatic REST fallback for reliability
+   - **XSS Sanitization**: All user-controlled GitHub data (README summaries, CODEOWNERS) sanitized with bleach.clean()
+   - Webhook health monitoring: Detects webhook types, cadence, active count (requires admin:repo_hook permission)
    - Progress tracking: Logs every 10 repositories during sync operations
    - Web UI: `/github/sync/configuration` for configuration and manual sync
    - Management command: `python manage.py sync_github_repositories`
@@ -278,6 +282,9 @@ The alerts collector creates a data hierarchy: Product → Repository → GitHub
 - Alert types: Dependabot (GraphQL), CodeQL (REST), Secret Scanning (REST)
 - Finding integration: Automatic Test creation per alert type, state synchronization
 - Admin UI: Complete CRUD for Repository, GitHubAlert, GitHubAlertSync models
+- **Data Integrity**: Dual-population strategy ensures both Repository and Product models stay synchronized
+- **Security Hardening**: XSS sanitization applied to all external GitHub data (README, CODEOWNERS) using bleach.clean()
+- **Webhook Monitoring**: Automatic webhook health tracking (types, cadence, active count) with graceful permission fallback
 - **Sync Configuration UI**: Web-based configuration at `/github/sync/configuration` (staff/superuser only)
   - GitHub token management with validation (format check + API connectivity test)
   - Account type selection (Organization or Personal Account)
@@ -329,8 +336,10 @@ Represents a GitHub repository with enrichment metadata:
 - Core fields: `name`, `github_repo_id` (unique), `github_url`
 - Relationships: `product` (ForeignKey), `related_products` (ManyToMany)
 - Activity tracking: `last_commit_date`, `active_contributors_90d`, `days_since_last_commit`
-- Metadata: `readme_summary`, `primary_language`, `primary_framework`
-- Ownership: `codeowners_content`, `ownership_confidence`
+- **Activity metrics** (added November 2025): `commit_count`, `open_issues_count`, `open_pr_count`
+- **Webhook health** (added November 2025): `has_webhooks`, `active_webhooks_count`, `webhook_cadence`, `webhook_types` (JSONField)
+- Metadata: `readme_summary`, `primary_language`, `primary_framework` (XSS sanitized with bleach.clean())
+- Ownership: `codeowners_content` (XSS sanitized), `ownership_confidence`
 - 36 binary signals across 5 categories (deployment, production, development, organization, security)
 - Alert metadata: `last_alert_sync`, `dependabot_alert_count`, `codeql_alert_count`, `secret_scanning_alert_count`
 - Pre-computed statistics: `cached_finding_counts` (JSONField)
@@ -368,11 +377,14 @@ Three new Test_Type records created automatically:
 - "GitHub Secret Scanning" - Exposed secrets alerts
 
 **Data Hierarchy Flow:**
-1. Repository record created/updated via `sync_github_repositories` command
-2. GitHubAlert records synced via `sync_github_alerts` command
-3. Findings created with `--create-findings` flag, linked to appropriate Test
-4. Finding updates trigger on re-sync based on alert state changes
-5. Each Repository gets one Engagement with three Tests (one per alert type)
+1. Repository record created/updated via `sync_github_repositories` command (dual-population to Repository + Product models)
+2. Activity metrics (commit_count, open_issues_count, open_pr_count) synced from GitHub API
+3. Webhook health metadata collected (requires admin:repo_hook permission, fails gracefully if missing)
+4. All external GitHub data (README summaries, CODEOWNERS content) sanitized with bleach.clean() before storage
+5. GitHubAlert records synced via `sync_github_alerts` command
+6. Findings created with `--create-findings` flag, linked to appropriate Test
+7. Finding updates trigger on re-sync based on alert state changes
+8. Each Repository gets one Engagement with three Tests (one per alert type)
 
 ### GitHub Insights Dashboard (January 2025)
 

@@ -2,7 +2,15 @@
 GitHub Repository Collector
 
 Main orchestrator for syncing repository metadata from GitHub API
-and updating DefectDojo Product records with enriched context.
+and updating DefectDojo Repository and Product models with enriched context.
+
+Features:
+- Dual-population strategy: Syncs data to both Repository (primary) and Product (legacy)
+- XSS sanitization: All external GitHub data sanitized with bleach.clean()
+- Webhook health monitoring: Tracks webhook types, cadence, and active count
+- GraphQL API v4 for bulk operations with REST API fallback
+- Activity metrics: commit_count, open_issues_count, open_pr_count
+- 36 binary signals across 5 categories
 
 Leverages existing DefectDojo GitHub integration patterns from dojo/github.py.
 """
@@ -12,6 +20,7 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
+import bleach
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -28,16 +37,20 @@ logger = logging.getLogger(__name__)
 
 class GitHubRepositoryCollector:
     """
-    Collects repository metadata from GitHub API and enriches DefectDojo Products.
+    Collects repository metadata from GitHub API and enriches DefectDojo Repository and Product models.
 
     Workflow:
     1. Authenticate with GitHub API using existing GITHUB_Conf/GITHUB_PKey models
     2. Fetch repository metadata (commits, contributors, releases, etc.)
-    3. Detect binary signals using SignalDetector
-    4. Classify tier using TierClassifier
-    5. Summarize README using ReadmeSummarizer
-    6. Update Product model with enriched data
-    7. Parse CODEOWNERS and assign ownership
+    3. Collect activity metrics (commit_count, open_issues_count, open_pr_count)
+    4. Collect webhook health metadata (requires admin:repo_hook permission, graceful fallback)
+    5. Detect binary signals using SignalDetector
+    6. Classify tier using TierClassifier
+    7. Summarize README using ReadmeSummarizer
+    8. Sanitize all external data with bleach.clean() (XSS protection)
+    9. Create/update Repository record with all 47 enrichment fields
+    10. Update Product model with same data (dual-population for legacy compatibility)
+    11. Parse CODEOWNERS and assign ownership
     """
 
     def __init__(self, github_token: Optional[str] = None, github_org: Optional[str] = None, use_graphql: bool = True):
@@ -277,6 +290,11 @@ class GitHubRepositoryCollector:
 
         # Update Product with collected data
         with transaction.atomic():
+            # Create or update Repository record (Bug Fix #1: populate Repository model)
+            repository, repo_created = self._get_or_create_repository_from_rest(
+                repo, product, metadata, signals, readme_data, classification
+            )
+
             # Repository activity
             product.last_commit_date = metadata['last_commit_date']
             product.active_contributors_90d = metadata['active_contributors_90d']
@@ -516,6 +534,19 @@ class GitHubRepositoryCollector:
             logger.warning(f"Could not fetch CODEOWNERS for {repo.full_name}: {e}")
             metadata['codeowners_content'] = ''
             metadata['ownership_confidence'] = 0
+
+        # Webhook health metrics (Bug Fix #2: integrate webhook collection)
+        try:
+            webhook_metadata = self._collect_webhook_metadata(repo.full_name)
+            metadata.update(webhook_metadata)
+        except Exception as e:
+            logger.warning(f"Could not fetch webhook metadata (may require admin permissions): {e}")
+            metadata.update({
+                'has_webhooks': False,
+                'active_webhooks_count': 0,
+                'webhook_cadence': 'Unknown',
+                'webhook_types': []
+            })
 
         return metadata
 
@@ -851,14 +882,14 @@ class GitHubRepositoryCollector:
             'webhook_cadence': metadata['webhook_cadence'],
             'webhook_types': metadata['webhook_types'],
 
-            # Repository metadata
-            'readme_summary': readme_data['summary'],
+            # Repository metadata (XSS sanitization applied)
+            'readme_summary': bleach.clean(readme_data.get('summary', ''), tags=[], strip=True),
             'readme_length': readme_data['length'],
             'primary_language': readme_data['primary_language'] or repo_data.get('primaryLanguage') or '',
             'primary_framework': readme_data['primary_framework'],
 
-            # Ownership
-            'codeowners_content': metadata['codeowners_content'],
+            # Ownership (XSS sanitization applied to codeowners_content)
+            'codeowners_content': bleach.clean(metadata.get('codeowners_content', ''), tags=[], strip=True),
             'ownership_confidence': metadata['ownership_confidence'],
 
             # Tier classification
@@ -898,6 +929,128 @@ class GitHubRepositoryCollector:
 
         repository, created = Repository.objects.update_or_create(
             github_repo_id=github_repo_id,
+            defaults=defaults
+        )
+
+        if created:
+            logger.info(f"Created new Repository: {repo_name} (ID: {github_repo_id})")
+        else:
+            logger.info(f"Updated Repository: {repo_name} (ID: {github_repo_id})")
+
+        return repository, created
+
+    def _get_or_create_repository_from_rest(
+        self,
+        repo,
+        product: Product,
+        metadata: dict,
+        signals: dict,
+        readme_data: dict,
+        classification: dict
+    ) -> tuple:
+        """
+        Get or create Repository from REST API data with enrichment fields.
+
+        Args:
+            repo: PyGithub Repository object
+            product: Product instance to link to
+            metadata: Extracted metadata dictionary
+            signals: Binary signals dictionary (36 fields)
+            readme_data: README summary data
+            classification: Tier classification data
+
+        Returns:
+            Tuple of (Repository, created_bool)
+        """
+        github_repo_id = repo.id
+        repo_name = repo.full_name
+
+        if not github_repo_id:
+            logger.warning(f"Repository {repo_name} missing github_repo_id - skipping Repository creation")
+            return None, False
+
+        # Calculate tier
+        tier = classification['tier']
+        if tier == 'archived' or repo.archived:
+            tier = Repository.ARCHIVED
+        elif tier == 'tier1':
+            tier = Repository.TIER1
+        elif tier == 'tier2':
+            tier = Repository.TIER2
+        elif tier == 'tier3':
+            tier = Repository.TIER3
+        else:
+            tier = Repository.TIER4
+
+        # Prepare defaults for update_or_create
+        defaults = {
+            'name': repo_name,
+            'product': product,
+            'github_url': repo.html_url,
+
+            # Activity tracking
+            'last_commit_date': metadata['last_commit_date'],
+            'active_contributors_90d': metadata['active_contributors_90d'],
+            'days_since_last_commit': metadata['days_since_last_commit'],
+
+            # Activity metrics (Enterprise GitHub management)
+            'commit_count': metadata['commit_count'],
+            'open_issues_count': metadata['open_issues_count'],
+            'open_pr_count': metadata['open_pr_count'],
+
+            # Webhook health monitoring (will be populated by Bug Fix #2)
+            'has_webhooks': metadata.get('has_webhooks', False),
+            'active_webhooks_count': metadata.get('active_webhooks_count', 0),
+            'webhook_cadence': metadata.get('webhook_cadence', 'Unknown'),
+            'webhook_types': metadata.get('webhook_types', []),
+
+            # Repository metadata (XSS sanitization applied)
+            'readme_summary': bleach.clean(readme_data.get('summary', ''), tags=[], strip=True),
+            'readme_length': readme_data['length'],
+            'primary_language': readme_data['primary_language'] or repo.language or '',
+            'primary_framework': readme_data['primary_framework'],
+
+            # Ownership (XSS sanitization applied to codeowners_content)
+            'codeowners_content': bleach.clean(metadata.get('codeowners_content', ''), tags=[], strip=True),
+            'ownership_confidence': metadata['ownership_confidence'],
+
+            # Tier classification
+            'tier': tier,
+
+            # All 36 binary signals
+            'has_dockerfile': signals.get('has_dockerfile', False),
+            'has_kubernetes_config': signals.get('has_kubernetes_config', False),
+            'has_ci_cd': signals.get('has_ci_cd', False),
+            'has_terraform': signals.get('has_terraform', False),
+            'has_deployment_scripts': signals.get('has_deployment_scripts', False),
+            'has_procfile': signals.get('has_procfile', False),
+            'has_environments': signals.get('has_environments', False),
+            'has_releases': signals.get('has_releases', False),
+            'has_branch_protection': signals.get('has_branch_protection', False),
+            'has_monitoring_config': signals.get('has_monitoring_config', False),
+            'has_ssl_config': signals.get('has_ssl_config', False),
+            'has_database_migrations': signals.get('has_database_migrations', False),
+            'recent_commits_30d': signals.get('recent_commits_30d', False),
+            'active_prs_30d': signals.get('active_prs_30d', False),
+            'multiple_contributors': signals.get('multiple_contributors', False),
+            'has_dependabot_activity': signals.get('has_dependabot_activity', False),
+            'recent_releases_90d': signals.get('recent_releases_90d', False),
+            'consistent_commit_pattern': signals.get('consistent_commit_pattern', False),
+            'has_tests': signals.get('has_tests', False),
+            'has_documentation': signals.get('has_documentation', False),
+            'has_api_specs': signals.get('has_api_specs', False),
+            'has_codeowners': signals.get('has_codeowners', False),
+            'has_security_md': signals.get('has_security_md', False),
+            'is_monorepo': signals.get('is_monorepo', False),
+            'has_security_scanning': signals.get('has_security_scanning', False),
+            'has_secret_scanning': signals.get('has_secret_scanning', False),
+            'has_dependency_scanning': signals.get('has_dependency_scanning', False),
+            'has_gitleaks_config': signals.get('has_gitleaks_config', False),
+            'has_sast_config': signals.get('has_sast_config', False),
+        }
+
+        repository, created = Repository.objects.update_or_create(
+            github_repo_id=str(github_repo_id),
             defaults=defaults
         )
 
