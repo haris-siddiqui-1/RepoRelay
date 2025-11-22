@@ -164,6 +164,7 @@ class Command(BaseCommand):
         """Sync all repositories from GitHub organization."""
         self.stdout.write(f'Starting repository sync (incremental={incremental})')
         self.stdout.write(f'Organization: {collector.github_org}')
+        self.stdout.write(self.style.SUCCESS('Progress will be logged every 10 repositories...'))
 
         if dry_run:
             self.stdout.write(self.style.WARNING('Dry run - listing repositories only'))

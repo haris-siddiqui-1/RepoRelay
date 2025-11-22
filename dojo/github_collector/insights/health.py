@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from dojo.github_collector.insights.base import BaseInsight
 from dojo.github_collector.insights.registry import InsightRegistry
-from dojo.models import Product
+from dojo.models import Product, Repository
 
 
 class RepositoriesWithoutREADME(BaseInsight):
@@ -29,33 +29,58 @@ class RepositoriesWithoutREADME(BaseInsight):
         filters = filters or {}
         product_type_id = filters.get('product_type_id')
 
-        # Base queryset - products with GitHub URLs but no documentation
-        queryset = Product.objects.filter(
-            github_url__isnull=False,
-            has_documentation=False
-        )
+        # Query Repository model for enrichment data
+        queryset = Repository.objects.filter(has_documentation=False).select_related('product')
 
         # Filter by product type if specified
         if product_type_id:
-            queryset = queryset.filter(prod_type_id=product_type_id)
+            queryset = queryset.filter(product__prod_type_id=product_type_id)
 
-        # Get repositories without documentation
+        # Get repositories with enrichment data
         repositories = queryset.values(
             'id',
             'name',
             'github_url',
-            'business_criticality'
+            'tier',
+            'days_since_last_commit',
+            'active_contributors_90d',
+            'cached_finding_counts',
+            'dependabot_alert_count',
+            'codeql_alert_count',
+            'secret_scanning_alert_count',
+            'has_tests',
+            'has_ci_cd',
+            'readme_length',
+            'last_commit_date'
         )
 
-        data = [
-            {
+        data = []
+        for repo in repositories:
+            # Calculate total finding count
+            finding_count = 0
+            if repo['cached_finding_counts']:
+                finding_count = sum(repo['cached_finding_counts'].values())
+
+            # Calculate total alert count
+            alert_count = (
+                (repo['dependabot_alert_count'] or 0) +
+                (repo['codeql_alert_count'] or 0) +
+                (repo['secret_scanning_alert_count'] or 0)
+            )
+
+            data.append({
                 'repository': repo['name'],
-                'tier': repo['business_criticality'] or 'Unknown',
+                'tier': repo['tier'] or 'unknown',
                 'github_url': repo['github_url'],
-                'action': 'Add Documentation'
-            }
-            for repo in repositories
-        ]
+                'days_since_last_commit': repo['days_since_last_commit'],
+                'contributors_90d': repo['active_contributors_90d'],
+                'finding_count': finding_count,
+                'alert_count': alert_count,
+                'has_tests': repo['has_tests'],
+                'has_ci_cd': repo['has_ci_cd'],
+                'readme_length': repo['readme_length'] or 0,
+                'last_commit_date': repo['last_commit_date'].isoformat() if repo['last_commit_date'] else None
+            })
 
         return {
             'title': 'Repositories Without Documentation',
@@ -82,33 +107,56 @@ class RepositoriesWithoutCICD(BaseInsight):
         filters = filters or {}
         product_type_id = filters.get('product_type_id')
 
-        # Base queryset - products with GitHub URLs but no CI/CD
-        queryset = Product.objects.filter(
-            github_url__isnull=False,
-            has_ci_cd=False
-        )
+        # Query Repository model for enrichment data
+        queryset = Repository.objects.filter(has_ci_cd=False).select_related('product')
 
         # Filter by product type if specified
         if product_type_id:
-            queryset = queryset.filter(prod_type_id=product_type_id)
+            queryset = queryset.filter(product__prod_type_id=product_type_id)
 
-        # Get repositories without CI/CD
+        # Get repositories with enrichment data
         repositories = queryset.values(
             'id',
             'name',
             'github_url',
-            'business_criticality'
+            'tier',
+            'days_since_last_commit',
+            'active_contributors_90d',
+            'cached_finding_counts',
+            'dependabot_alert_count',
+            'codeql_alert_count',
+            'secret_scanning_alert_count',
+            'has_tests',
+            'has_documentation',
+            'last_commit_date'
         )
 
-        data = [
-            {
+        data = []
+        for repo in repositories:
+            # Calculate total finding count
+            finding_count = 0
+            if repo['cached_finding_counts']:
+                finding_count = sum(repo['cached_finding_counts'].values())
+
+            # Calculate total alert count
+            alert_count = (
+                (repo['dependabot_alert_count'] or 0) +
+                (repo['codeql_alert_count'] or 0) +
+                (repo['secret_scanning_alert_count'] or 0)
+            )
+
+            data.append({
                 'repository': repo['name'],
-                'tier': repo['business_criticality'] or 'Unknown',
+                'tier': repo['tier'] or 'unknown',
                 'github_url': repo['github_url'],
-                'action': 'Add CI/CD Pipeline'
-            }
-            for repo in repositories
-        ]
+                'days_since_last_commit': repo['days_since_last_commit'],
+                'contributors_90d': repo['active_contributors_90d'],
+                'finding_count': finding_count,
+                'alert_count': alert_count,
+                'has_tests': repo['has_tests'],
+                'has_documentation': repo['has_documentation'],
+                'last_commit_date': repo['last_commit_date'].isoformat() if repo['last_commit_date'] else None
+            })
 
         return {
             'title': 'Repositories Without CI/CD',

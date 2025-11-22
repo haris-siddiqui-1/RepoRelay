@@ -13,7 +13,7 @@
 
     <!-- Modern CSS - Tailwind -->
     {% load static %}
-    <link rel="stylesheet" href="{% static 'dist/css/styles-i1SwRXYS.css' %}">
+    <link rel="stylesheet" href="{% static 'dist/css/styles-1NKdWfjw.css' %}">
 
     <!-- Chart.js with date adapter -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -166,9 +166,9 @@
             height: 3rem;
             width: 40%;
         }
-
-        {% block add_styles %}{% endblock %}
     </style>
+
+    {% block add_styles %}{% endblock %}
 </head>
 
 <body class="h-full" x-data="{
@@ -410,6 +410,9 @@
             }
         }
     </script>
+
+    <!-- Alpine.js Components - Load before Alpine initializes -->
+    {% block alpine_components %}{% endblock %}
 
     <!-- Modern JS - Alpine.js + Custom -->
     <script type="module" src="{% static 'dist/js/main-BUCmszK_.js' %}"></script>

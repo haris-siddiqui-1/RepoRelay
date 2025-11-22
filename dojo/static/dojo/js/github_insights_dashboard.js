@@ -354,6 +354,308 @@ var GitHubInsightsDashboard = (function() {
             return;
         }
 
+        // Check if this is repository data (has 'repository' or 'name' field)
+        var isRepoData = data[0] && (data[0].repository || data[0].name || data[0].github_url);
+
+        // Add view toggle if it's repository data
+        if (isRepoData) {
+            var viewModeKey = 'insightViewMode_' + widgetId;
+            var savedViewMode = localStorage.getItem(viewModeKey) || 'table';
+
+            var $viewToggle = $('<div>').addClass('view-toggle-container').html(
+                '<div class="view-toggle">' +
+                    '<button class="view-toggle-btn ' + (savedViewMode === 'grid' ? 'active' : '') + '" data-view="grid">' +
+                        '<svg viewBox="0 0 16 16" fill="currentColor" style="width: 16px; height: 16px;"><path d="M1.75 1.5a.25.25 0 0 0-.25.25v3.5c0 .138.112.25.25.25h3.5a.25.25 0 0 0 .25-.25v-3.5a.25.25 0 0 0-.25-.25h-3.5zM1.75 7.5a.25.25 0 0 0-.25.25v3.5c0 .138.112.25.25.25h3.5a.25.25 0 0 0 .25-.25v-3.5a.25.25 0 0 0-.25-.25h-3.5zM7.75 1.5a.25.25 0 0 0-.25.25v3.5c0 .138.112.25.25.25h3.5a.25.25 0 0 0 .25-.25v-3.5a.25.25 0 0 0-.25-.25h-3.5zM7.75 7.5a.25.25 0 0 0-.25.25v3.5c0 .138.112.25.25.25h3.5a.25.25 0 0 0 .25-.25v-3.5a.25.25 0 0 0-.25-.25h-3.5z"/></svg>' +
+                    '</button>' +
+                    '<button class="view-toggle-btn ' + (savedViewMode === 'table' ? 'active' : '') + '" data-view="table">' +
+                        '<svg viewBox="0 0 16 16" fill="currentColor" style="width: 16px; height: 16px;"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25V1.75zm1.75-.25a.25.25 0 0 0-.25.25v3h13v-3a.25.25 0 0 0-.25-.25H1.75zm-.25 4.5v8.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V6h-13z"/></svg>' +
+                    '</button>' +
+                '</div>'
+            );
+
+            $('#' + widgetId + ' .widget-body').append($viewToggle);
+
+            // Container for both views
+            var $viewContainer = $('<div>').attr('id', widgetId + '-view-container');
+            $('#' + widgetId + ' .widget-body').append($viewContainer);
+
+            // Handle view toggle clicks
+            $viewToggle.find('.view-toggle-btn').on('click', function() {
+                var newView = $(this).data('view');
+                localStorage.setItem(viewModeKey, newView);
+                $viewToggle.find('.view-toggle-btn').removeClass('active');
+                $(this).addClass('active');
+
+                // Re-render with new view
+                $viewContainer.empty();
+                if (newView === 'grid') {
+                    renderRepositoryCards(widgetId, data, $viewContainer);
+                } else {
+                    renderRepositoryTable(widgetId, data, $viewContainer);
+                }
+            });
+
+            // Render initial view
+            if (savedViewMode === 'grid') {
+                renderRepositoryCards(widgetId, data, $viewContainer);
+            } else {
+                renderRepositoryTable(widgetId, data, $viewContainer);
+            }
+        } else {
+            // Non-repository data, render regular table
+            renderRepositoryTable(widgetId, data, $('#' + widgetId + ' .widget-body'));
+        }
+    }
+
+    /**
+     * Render repository data as card grid
+     */
+    function renderRepositoryCards(widgetId, data, $container) {
+        var $grid = $('<div>').addClass('repo-card-grid').attr('data-widget-id', widgetId);
+
+        // Load saved order and pinned state
+        var savedOrder = loadCardOrder(widgetId);
+        var pinnedRepos = loadPinnedRepos(widgetId);
+
+        // Reorder data based on saved order
+        if (savedOrder && savedOrder.length === data.length) {
+            var orderedData = [];
+            savedOrder.forEach(function(repoName) {
+                var repo = data.find(function(r) { return (r.repository || r.name) === repoName; });
+                if (repo) orderedData.push(repo);
+            });
+            if (orderedData.length === data.length) {
+                data = orderedData;
+            }
+        }
+
+        data.forEach(function(repo, index) {
+            var repoName = repo.repository || repo.name || 'Unknown';
+            var tier = repo.tier || 'unknown';
+            var githubUrl = repo.github_url || '#';
+            var action = repo.action || '';
+            var activityStatus = determineActivityStatus(repo);
+            var isPinned = pinnedRepos.indexOf(repoName) !== -1;
+
+            var $card = $('<div>')
+                .addClass('repo-card')
+                .attr('draggable', 'true')
+                .attr('data-repo-name', repoName)
+                .attr('data-index', index)
+                .toggleClass('pinned', isPinned)
+                .html(
+                    '<div class="repo-card-pin" title="' + (isPinned ? 'Unpin' : 'Pin') + ' card">' +
+                        '<i class="fa-solid fa-thumbtack"></i>' +
+                    '</div>' +
+                    '<div class="repo-card-header">' +
+                        '<a href="' + githubUrl + '" target="_blank" class="repo-card-title">' +
+                            '<i class="fa-brands fa-github"></i> ' + repoName +
+                        '</a>' +
+                    '</div>' +
+                    '<div class="repo-card-tags">' +
+                        '<span class="repo-tag tier-' + tier + '">' + tier + '</span>' +
+                        (activityStatus ? '<span class="repo-tag status-' + activityStatus.toLowerCase().replace(' ', '-') + '">' + activityStatus + '</span>' : '') +
+                        (repo.finding_count ? '<span class="repo-tag findings">' + repo.finding_count + ' findings</span>' : '') +
+                    '</div>' +
+                    (repo.last_commit_date || repo.days_since_last_commit ?
+                        '<div class="repo-card-stats">' +
+                            (repo.days_since_last_commit ? 'Last commit: ' + repo.days_since_last_commit + ' days ago' : '') +
+                            (repo.contributors_90d ? ' • ' + repo.contributors_90d + ' contributors' : '') +
+                        '</div>' : '') +
+                    (action ? '<div class="repo-card-action"><a href="#">→ ' + action + '</a></div>' : '')
+                );
+
+            $grid.append($card);
+        });
+
+        $container.append($grid);
+
+        // Attach drag-and-drop handlers
+        attachDragDropHandlers(widgetId, $grid);
+
+        // Attach pin button handlers
+        attachPinHandlers(widgetId, $grid);
+    }
+
+    /**
+     * Determine activity status from repository data
+     */
+    function determineActivityStatus(repo) {
+        if (repo.days_since_last_commit > 180) return 'Stale';
+        if (repo.days_since_last_commit > 90) return 'Low Activity';
+        if (repo.days_since_last_commit < 7) return 'Active';
+        return null;
+    }
+
+    /**
+     * Attach drag-and-drop event handlers to repository cards
+     */
+    function attachDragDropHandlers(widgetId, $grid) {
+        var draggedElement = null;
+
+        $grid.find('.repo-card').each(function() {
+            var $card = $(this);
+
+            // Prevent dragging if pinned
+            if ($card.hasClass('pinned')) {
+                $card.attr('draggable', 'false');
+                return;
+            }
+
+            // Drag start
+            $card.on('dragstart', function(e) {
+                draggedElement = this;
+                $(this).addClass('dragging');
+                e.originalEvent.dataTransfer.effectAllowed = 'move';
+                e.originalEvent.dataTransfer.setData('text/html', this.innerHTML);
+            });
+
+            // Drag over
+            $card.on('dragover', function(e) {
+                if (e.preventDefault) {
+                    e.preventDefault();
+                }
+                e.originalEvent.dataTransfer.dropEffect = 'move';
+
+                var $this = $(this);
+                if ($this.hasClass('pinned')) {
+                    return false;
+                }
+
+                $this.addClass('drag-over');
+                return false;
+            });
+
+            // Drag enter
+            $card.on('dragenter', function(e) {
+                if (!$(this).hasClass('pinned')) {
+                    $(this).addClass('drag-over');
+                }
+            });
+
+            // Drag leave
+            $card.on('dragleave', function(e) {
+                $(this).removeClass('drag-over');
+            });
+
+            // Drop
+            $card.on('drop', function(e) {
+                if (e.stopPropagation) {
+                    e.stopPropagation();
+                }
+
+                var $this = $(this);
+                if ($this.hasClass('pinned')) {
+                    return false;
+                }
+
+                $this.removeClass('drag-over');
+
+                if (draggedElement !== this) {
+                    // Swap elements
+                    var $dragged = $(draggedElement);
+                    var $target = $this;
+
+                    if ($dragged.index() < $target.index()) {
+                        $target.after($dragged);
+                    } else {
+                        $target.before($dragged);
+                    }
+
+                    // Save new order
+                    saveCardOrder(widgetId, $grid);
+                }
+
+                return false;
+            });
+
+            // Drag end
+            $card.on('dragend', function(e) {
+                $(this).removeClass('dragging');
+                $grid.find('.repo-card').removeClass('drag-over');
+            });
+        });
+    }
+
+    /**
+     * Attach pin button handlers
+     */
+    function attachPinHandlers(widgetId, $grid) {
+        $grid.find('.repo-card-pin').on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var $card = $(this).closest('.repo-card');
+            var repoName = $card.attr('data-repo-name');
+            var isPinned = $card.hasClass('pinned');
+
+            // Toggle pinned state
+            $card.toggleClass('pinned');
+            $card.attr('draggable', isPinned ? 'true' : 'false');
+
+            // Update pin button title
+            $(this).attr('title', isPinned ? 'Pin card' : 'Unpin card');
+
+            // Save pinned state
+            var pinnedRepos = loadPinnedRepos(widgetId);
+            if (isPinned) {
+                // Remove from pinned
+                pinnedRepos = pinnedRepos.filter(function(name) { return name !== repoName; });
+            } else {
+                // Add to pinned
+                if (pinnedRepos.indexOf(repoName) === -1) {
+                    pinnedRepos.push(repoName);
+                }
+            }
+            savePinnedRepos(widgetId, pinnedRepos);
+
+            // Re-attach drag handlers to update draggable state
+            attachDragDropHandlers(widgetId, $grid);
+        });
+    }
+
+    /**
+     * Load card order from localStorage
+     */
+    function loadCardOrder(widgetId) {
+        var key = 'repoCardOrder_' + widgetId;
+        var saved = localStorage.getItem(key);
+        return saved ? JSON.parse(saved) : null;
+    }
+
+    /**
+     * Save card order to localStorage
+     */
+    function saveCardOrder(widgetId, $grid) {
+        var order = [];
+        $grid.find('.repo-card').each(function() {
+            order.push($(this).attr('data-repo-name'));
+        });
+        var key = 'repoCardOrder_' + widgetId;
+        localStorage.setItem(key, JSON.stringify(order));
+    }
+
+    /**
+     * Load pinned repos from localStorage
+     */
+    function loadPinnedRepos(widgetId) {
+        var key = 'pinnedRepos_' + widgetId;
+        var saved = localStorage.getItem(key);
+        return saved ? JSON.parse(saved) : [];
+    }
+
+    /**
+     * Save pinned repos to localStorage
+     */
+    function savePinnedRepos(widgetId, pinnedRepos) {
+        var key = 'pinnedRepos_' + widgetId;
+        localStorage.setItem(key, JSON.stringify(pinnedRepos));
+    }
+
+    /**
+     * Render repository data as table (jQuery DataTables)
+     */
+    function renderRepositoryTable(widgetId, data, $container) {
         var $tableContainer = $('<div>').addClass('widget-table table-responsive');
         var tableId = widgetId + '-table';
         var $table = $('<table>')
@@ -389,7 +691,7 @@ var GitHubInsightsDashboard = (function() {
         $table.append($tbody);
 
         $tableContainer.append($table);
-        $('#' + widgetId + ' .widget-body').append($tableContainer);
+        $container.append($tableContainer);
 
         // Initialize DataTables for sorting, pagination, and search
         $('#' + tableId).DataTable({

@@ -128,6 +128,12 @@ query GetRepositoryData($owner: String!, $name: String!) {
       }
     }
 
+    # Open PRs count (enterprise work-in-progress metric)
+    # GraphQL alias pattern: same field with different filter
+    openPullRequests: pullRequests(states: OPEN) {
+      totalCount         # Number of currently open pull requests
+    }
+
     # Security scanning (has_secret_scanning signal)
     # ⚠️ Requires security permissions - may return null
     vulnerabilityAlerts(first: 1) {

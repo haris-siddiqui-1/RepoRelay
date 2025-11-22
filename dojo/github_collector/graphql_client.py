@@ -63,6 +63,7 @@ class GitHubGraphQLClient:
         self.queries_dir = Path(__file__).parent / "queries"
         self.repository_query = self._load_query("repository_full.graphql")
         self.organization_query = self._load_query("organization_batch.graphql")
+        self.user_query = self._load_query("user_batch.graphql")
         self.dependabot_alerts_query = self._load_query("dependabot_alerts.graphql")
 
         logger.info("Initialized GitHub GraphQL client")
@@ -272,6 +273,103 @@ class GitHubGraphQLClient:
             logger.error(f"Unexpected error fetching organization {org}: {e}", exc_info=True)
             return repositories
 
+    def get_user_repositories(
+        self,
+        login: str,
+        updated_since: Optional[datetime] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch repositories from personal user account with optional filtering.
+
+        Supports incremental sync by filtering on updatedAt timestamp.
+        Only fetches repositories owned by the user (not collaborated/forked).
+
+        Args:
+            login: User login name
+            updated_since: Only return repos updated after this datetime
+            limit: Maximum number of repositories to return (for testing)
+
+        Returns:
+            List of repository data dictionaries
+        """
+        logger.info(f"Fetching user repositories for {login} (updated_since={updated_since})")
+
+        repositories = []
+        cursor = None
+        has_next_page = True
+        page_count = 0
+
+        try:
+            while has_next_page:
+                page_count += 1
+                variables = {
+                    "login": login,
+                    "cursor": cursor
+                }
+
+                result = self.execute_query(self.user_query, variables)
+
+                # Extract data
+                user_data = result.get("data", {}).get("user", {})
+                if not user_data:
+                    logger.warning(f"User {login} not found or not accessible")
+                    break
+
+                repos_connection = user_data.get("repositories", {})
+                page_info = repos_connection.get("pageInfo", {})
+                nodes = repos_connection.get("nodes", [])
+
+                # Filter by updated_since if provided
+                for node in nodes:
+                    if updated_since:
+                        updated_at_str = node.get("updatedAt")
+                        if updated_at_str:
+                            updated_at = datetime.fromisoformat(updated_at_str.replace('Z', '+00:00'))
+
+                            # Ensure both datetimes are timezone-aware for comparison
+                            if updated_since.tzinfo is None:
+                                # Make updated_since timezone-aware (assume UTC)
+                                from django.utils import timezone as tz
+                                updated_since = tz.make_aware(updated_since)
+
+                            if updated_at <= updated_since:
+                                logger.debug(f"Skipping {node.get('nameWithOwner')} - not updated since {updated_since}")
+                                continue
+
+                    parsed = self._parse_repository_data(node)
+                    if parsed:
+                        repositories.append(parsed)
+
+                    # Check limit
+                    if limit and len(repositories) >= limit:
+                        logger.info(f"Reached limit of {limit} repositories")
+                        return repositories
+
+                # Check pagination
+                has_next_page = page_info.get("hasNextPage", False)
+                cursor = page_info.get("endCursor")
+
+                # Log progress
+                rate_limit = result.get("data", {}).get("rateLimit", {})
+                self._log_rate_limit(rate_limit, page=page_count)
+
+                logger.info(f"Page {page_count}: Fetched {len(nodes)} repos, "
+                           f"filtered to {len(repositories)} total")
+
+            logger.info(f"Completed user fetch: {len(repositories)} repositories")
+            return repositories
+
+        except requests.RequestException as e:
+            logger.error(f"HTTP error fetching user {login}: {e}")
+            return repositories
+        except ValueError as e:
+            logger.error(f"GraphQL error fetching user {login}: {e}")
+            return repositories
+        except Exception as e:
+            logger.error(f"Unexpected error fetching user {login}: {e}", exc_info=True)
+            return repositories
+
     def _parse_repository_data(self, repo_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Parse GraphQL repository data into structured format.
@@ -321,6 +419,7 @@ class GitHubGraphQLClient:
         parsed['pullRequests'] = self._parse_pull_requests(repo_data.get('pullRequests'))
         parsed['vulnerabilityAlerts'] = self._parse_connection(repo_data.get('vulnerabilityAlerts'))
         parsed['issues'] = self._parse_connection(repo_data.get('issues'))
+        parsed['openPullRequests'] = self._parse_connection(repo_data.get('openPullRequests'))
 
         return parsed
 

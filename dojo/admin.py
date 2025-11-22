@@ -157,6 +157,17 @@ class RepositoryAdmin(admin.ModelAdmin):
                 'last_commit_date',
                 'active_contributors_90d',
                 'days_since_last_commit',
+                'commit_count',
+                'open_issues_count',
+                'open_pr_count',
+            )
+        }),
+        ('Webhook Health', {
+            'fields': (
+                'has_webhooks',
+                'active_webhooks_count',
+                'webhook_cadence',
+                'webhook_types',
             )
         }),
         ('Metadata', {

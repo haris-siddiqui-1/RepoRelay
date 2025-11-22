@@ -54,12 +54,31 @@ document.addEventListener('alpine:init', () => {
         showBulkActions: false,
         isLoading: false,
 
+        // Column Customization
+        columnWidths: {},
+        hiddenColumns: [],
+        columnOrder: [],
+        showColumnCustomizer: false,
+
+        // Column Resizing
+        resizingColumn: null,
+        resizeStartX: 0,
+        resizeStartWidth: 0,
+
         // ============================================
         // INITIALIZATION
         // ============================================
 
         init() {
             this.filteredData = [...this.data];
+
+            // Load user preferences from localStorage
+            this.loadColumnPreferences();
+
+            // Initialize column order if not set
+            if (this.columnOrder.length === 0) {
+                this.columnOrder = this.columns.map(col => col.key);
+            }
 
             // Apply initial sort if specified
             if (this.sortColumn) {
@@ -88,6 +107,152 @@ document.addEventListener('alpine:init', () => {
             window.addEventListener('resize', () => {
                 this.syncColumnWidths();
             });
+
+            // Watch for changes to column preferences and auto-save
+            this.$watch('columnWidths', () => {
+                this.saveColumnPreferences();
+            });
+
+            this.$watch('hiddenColumns', () => {
+                this.saveColumnPreferences();
+            });
+
+            this.$watch('columnOrder', () => {
+                this.saveColumnPreferences();
+            });
+        },
+
+        // ============================================
+        // COLUMN CUSTOMIZATION - LOCALSTORAGE
+        // ============================================
+
+        getStorageKey() {
+            // Generate unique key per table type
+            // Try to detect table type from columns or context
+            const tableType = this.columns.find(col => col.key === 'severity') ? 'findings'
+                            : this.columns.find(col => col.key === 'product_type') ? 'products'
+                            : this.columns.find(col => col.key === 'target_start') ? 'engagements'
+                            : 'default';
+            return `dataTable_${tableType}_columns`;
+        },
+
+        loadColumnPreferences() {
+            const key = this.getStorageKey();
+            const stored = localStorage.getItem(key);
+
+            if (stored) {
+                try {
+                    const preferences = JSON.parse(stored);
+                    this.columnWidths = preferences.widths || {};
+                    this.hiddenColumns = preferences.hidden || [];
+                    this.columnOrder = preferences.order || [];
+                } catch (e) {
+                    console.error('Failed to load column preferences:', e);
+                }
+            }
+        },
+
+        saveColumnPreferences() {
+            const key = this.getStorageKey();
+            const preferences = {
+                widths: this.columnWidths,
+                hidden: this.hiddenColumns,
+                order: this.columnOrder
+            };
+
+            try {
+                localStorage.setItem(key, JSON.stringify(preferences));
+            } catch (e) {
+                console.error('Failed to save column preferences:', e);
+            }
+        },
+
+        resetColumnPreferences() {
+            const key = this.getStorageKey();
+            localStorage.removeItem(key);
+            this.columnWidths = {};
+            this.hiddenColumns = [];
+            this.columnOrder = this.columns.map(col => col.key);
+        },
+
+        // ============================================
+        // COLUMN RESIZING
+        // ============================================
+
+        startResize(columnKey, event) {
+            // Prevent text selection during drag
+            event.preventDefault();
+
+            this.resizingColumn = columnKey;
+            this.resizeStartX = event.clientX;
+
+            // Get current width of the column
+            const th = event.target.closest('th');
+            if (th) {
+                this.resizeStartWidth = th.offsetWidth;
+            }
+
+            // Add global mouse event listeners
+            document.addEventListener('mousemove', this.doResize.bind(this));
+            document.addEventListener('mouseup', this.stopResize.bind(this));
+
+            // Add resizing class to body for cursor
+            document.body.classList.add('col-resizing');
+        },
+
+        doResize(event) {
+            if (!this.resizingColumn) return;
+
+            // Calculate new width based on mouse movement
+            const deltaX = event.clientX - this.resizeStartX;
+            const newWidth = Math.max(80, Math.min(800, this.resizeStartWidth + deltaX));
+
+            // Update column width in state (will trigger auto-save)
+            this.columnWidths[this.resizingColumn] = newWidth;
+
+            // Apply width to header cells immediately
+            const headerTable = this.$refs.headerTable;
+            if (headerTable) {
+                const headerCells = headerTable.querySelectorAll('thead th');
+                const columnIndex = this.getOrderedColumns().findIndex(col => col.key === this.resizingColumn);
+
+                if (headerCells[columnIndex + 2]) { // +2 for checkbox and expand columns
+                    headerCells[columnIndex + 2].style.width = newWidth + 'px';
+                    headerCells[columnIndex + 2].style.minWidth = newWidth + 'px';
+                    headerCells[columnIndex + 2].style.maxWidth = newWidth + 'px';
+                }
+            }
+
+            // Apply width to body cells immediately
+            const bodyTable = this.$refs.bodyTable;
+            if (bodyTable) {
+                const bodyCells = bodyTable.querySelectorAll(`tbody td:nth-child(${this.getOrderedColumns().findIndex(col => col.key === this.resizingColumn) + 3})`);
+                bodyCells.forEach(cell => {
+                    cell.style.width = newWidth + 'px';
+                    cell.style.minWidth = newWidth + 'px';
+                    cell.style.maxWidth = newWidth + 'px';
+                });
+            }
+        },
+
+        stopResize() {
+            if (!this.resizingColumn) return;
+
+            // Remove global mouse event listeners
+            document.removeEventListener('mousemove', this.doResize);
+            document.removeEventListener('mouseup', this.stopResize);
+
+            // Remove resizing class from body
+            document.body.classList.remove('col-resizing');
+
+            // Clear resizing state
+            this.resizingColumn = null;
+            this.resizeStartX = 0;
+            this.resizeStartWidth = 0;
+        },
+
+        getColumnWidth(columnKey) {
+            return this.columnWidths[columnKey] || null;
         },
 
         syncColumnWidths() {
@@ -441,6 +606,96 @@ document.addEventListener('alpine:init', () => {
 
         getCellValue(row, column) {
             return row[column.key];
+        },
+
+        // Column customization utilities
+        getOrderedColumns() {
+            // Return columns in the order specified by columnOrder
+            if (this.columnOrder.length === 0) {
+                return this.columns;
+            }
+
+            const orderedCols = [];
+            this.columnOrder.forEach(key => {
+                const col = this.columns.find(c => c.key === key);
+                if (col) {
+                    orderedCols.push(col);
+                }
+            });
+
+            // Add any columns not in columnOrder (newly added columns)
+            this.columns.forEach(col => {
+                if (!this.columnOrder.includes(col.key)) {
+                    orderedCols.push(col);
+                }
+            });
+
+            return orderedCols;
+        },
+
+        getVisibleColumns() {
+            return this.getOrderedColumns().filter(col => !this.hiddenColumns.includes(col.key));
+        },
+
+        isColumnVisible(columnKey) {
+            return !this.hiddenColumns.includes(columnKey);
+        },
+
+        toggleColumnVisibility(columnKey) {
+            const index = this.hiddenColumns.indexOf(columnKey);
+            if (index > -1) {
+                // Show column
+                this.hiddenColumns.splice(index, 1);
+            } else {
+                // Hide column - but ensure at least one column remains visible
+                const visibleCount = this.columns.length - this.hiddenColumns.length;
+                if (visibleCount > 1) {
+                    this.hiddenColumns.push(columnKey);
+                } else {
+                    console.warn('Cannot hide all columns - at least one must remain visible');
+                }
+            }
+        },
+
+        moveColumn(fromIndex, toIndex) {
+            const newOrder = [...this.columnOrder];
+            const [movedColumn] = newOrder.splice(fromIndex, 1);
+            newOrder.splice(toIndex, 0, movedColumn);
+            this.columnOrder = newOrder;
+        },
+
+        startColumnDrag(columnKey, event) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', columnKey);
+            event.target.classList.add('dragging');
+        },
+
+        onColumnDragOver(event) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = 'move';
+        },
+
+        dropColumn(targetColumnKey, event) {
+            event.preventDefault();
+
+            const draggedColumnKey = event.dataTransfer.getData('text/plain');
+            if (draggedColumnKey === targetColumnKey) return;
+
+            const fromIndex = this.columnOrder.indexOf(draggedColumnKey);
+            const toIndex = this.columnOrder.indexOf(targetColumnKey);
+
+            if (fromIndex !== -1 && toIndex !== -1) {
+                this.moveColumn(fromIndex, toIndex);
+            }
+
+            // Remove dragging class from all headers
+            document.querySelectorAll('th.dragging').forEach(th => {
+                th.classList.remove('dragging');
+            });
+        },
+
+        onColumnDragEnd(event) {
+            event.target.classList.remove('dragging');
         },
 
         formatCell(value, column) {

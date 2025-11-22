@@ -840,6 +840,17 @@ class GitHubRepositoryCollector:
             'active_contributors_90d': metadata['active_contributors_90d'],
             'days_since_last_commit': metadata['days_since_last_commit'],
 
+            # Activity metrics (Enterprise GitHub management)
+            'commit_count': metadata['commit_count'],
+            'open_issues_count': metadata['open_issues_count'],
+            'open_pr_count': metadata['open_pr_count'],
+
+            # Webhook health monitoring
+            'has_webhooks': metadata['has_webhooks'],
+            'active_webhooks_count': metadata['active_webhooks_count'],
+            'webhook_cadence': metadata['webhook_cadence'],
+            'webhook_types': metadata['webhook_types'],
+
             # Repository metadata
             'readme_summary': readme_data['summary'],
             'readme_length': readme_data['length'],
@@ -897,6 +908,185 @@ class GitHubRepositoryCollector:
 
         return repository, created
 
+    def _detect_webhook_types(self, hooks):
+        """
+        Detect webhook integration types from config URLs.
+
+        Args:
+            hooks: List of PyGithub Hook objects
+
+        Returns:
+            Sorted list of detected webhook types
+        """
+        types = set()
+
+        for hook in hooks:
+            url = hook.config.get('url', '').lower()
+
+            # CI/CD tools
+            if 'jenkins' in url:
+                types.add('CI/CD - Jenkins')
+            elif 'circleci' in url:
+                types.add('CI/CD - CircleCI')
+            elif 'travis' in url or 'travis-ci' in url:
+                types.add('CI/CD - Travis')
+            elif 'github' in url and 'actions' in url:
+                types.add('CI/CD - GitHub Actions')
+            elif 'gitlab' in url:
+                types.add('CI/CD - GitLab')
+            elif 'bamboo' in url:
+                types.add('CI/CD - Bamboo')
+
+            # Issue trackers
+            elif 'jira' in url or 'atlassian' in url:
+                types.add('JIRA')
+            elif 'linear' in url:
+                types.add('Linear')
+
+            # Communication
+            elif 'slack' in url:
+                types.add('Slack')
+            elif 'teams' in url or 'microsoft' in url:
+                types.add('Microsoft Teams')
+            elif 'discord' in url:
+                types.add('Discord')
+
+            # Monitoring/Alerting
+            elif 'pagerduty' in url:
+                types.add('PagerDuty')
+            elif 'datadog' in url:
+                types.add('Datadog')
+            elif 'newrelic' in url:
+                types.add('New Relic')
+            elif 'sentry' in url:
+                types.add('Sentry')
+
+            # Security
+            elif 'snyk' in url:
+                types.add('Security - Snyk')
+            elif 'sonarqube' in url or 'sonarcloud' in url:
+                types.add('Security - SonarQube')
+
+            else:
+                types.add('Custom')
+
+        return sorted(list(types))
+
+    def _calculate_webhook_cadence(self, repo_full_name, hooks):
+        """
+        Calculate webhook delivery cadence from last 25 events.
+
+        Args:
+            repo_full_name: Repository full name (owner/repo)
+            hooks: List of PyGithub Hook objects
+
+        Returns:
+            Cadence classification string
+        """
+        import statistics
+
+        if not hooks:
+            return "Inactive"
+
+        all_deliveries = []
+
+        # Fetch deliveries for each active webhook (max 25 events)
+        for hook in hooks:
+            if not hook.active:
+                continue
+
+            try:
+                # REST API: GET /repos/{owner}/{repo}/hooks/{hook_id}/deliveries?per_page=25
+                deliveries = hook.get_deliveries(per_page=25)
+                all_deliveries.extend(list(deliveries))
+            except Exception as e:
+                logger.debug(f"Could not fetch deliveries for hook {hook.id} in {repo_full_name}: {e}")
+                continue
+
+        if len(all_deliveries) < 2:
+            return "Inactive"
+
+        # Sort by delivered_at (most recent first)
+        all_deliveries.sort(key=lambda d: d.delivered_at, reverse=True)
+
+        # Take last 25 events across all webhooks
+        recent_deliveries = all_deliveries[:25]
+
+        # Calculate time deltas between consecutive deliveries
+        deltas = []
+        for i in range(len(recent_deliveries) - 1):
+            t1 = recent_deliveries[i].delivered_at
+            t2 = recent_deliveries[i+1].delivered_at
+            delta_seconds = (t1 - t2).total_seconds()
+            deltas.append(delta_seconds)
+
+        if not deltas:
+            return "Inactive"
+
+        # Use median to avoid outliers
+        median_seconds = statistics.median(deltas)
+
+        # Classify cadence
+        if median_seconds < 3600:  # < 1 hour
+            return "Hourly"
+        elif median_seconds < 7200:  # < 2 hours
+            return "2 Hours"
+        elif median_seconds < 86400:  # < 1 day
+            return "Daily"
+        elif median_seconds < 604800:  # < 1 week
+            return "Weekly"
+        elif median_seconds < 2592000:  # < 30 days
+            return "Monthly"
+        else:
+            return "Inactive"
+
+    def _collect_webhook_metadata(self, repo_full_name):
+        """
+        Collect webhook health data via REST API.
+
+        Args:
+            repo_full_name: Repository full name (owner/repo)
+
+        Returns:
+            Dictionary with webhook metadata
+        """
+        try:
+            # List webhooks (1 REST API call)
+            hooks = self.github_client.get_repo(repo_full_name).get_hooks()
+            hooks_list = list(hooks)
+
+            if not hooks_list:
+                return {
+                    'has_webhooks': False,
+                    'active_webhooks_count': 0,
+                    'webhook_cadence': 'Inactive',
+                    'webhook_types': []
+                }
+
+            # Count active webhooks
+            active_count = sum(1 for h in hooks_list if h.active)
+
+            # Detect webhook types from URLs
+            webhook_types = self._detect_webhook_types(hooks_list)
+
+            # Calculate cadence from delivery history (1 REST call per active webhook)
+            cadence = self._calculate_webhook_cadence(repo_full_name, hooks_list)
+
+            return {
+                'has_webhooks': True,
+                'active_webhooks_count': active_count,
+                'webhook_cadence': cadence,
+                'webhook_types': webhook_types
+            }
+        except Exception as e:
+            logger.warning(f"Failed to collect webhook metadata for {repo_full_name}: {e}")
+            return {
+                'has_webhooks': False,
+                'active_webhooks_count': 0,
+                'webhook_cadence': 'Unknown',
+                'webhook_types': []
+            }
+
     def _extract_metadata_from_graphql(self, repo_data: dict) -> dict:
         """
         Extract repository metadata from GraphQL data.
@@ -933,13 +1123,28 @@ class GitHubRepositoryCollector:
         issues = repo_data.get('issues', {})
         metadata['open_issues_count'] = issues.get('totalCount', 0)
 
-        pull_requests = repo_data.get('pullRequests', {})
-        metadata['open_pr_count'] = pull_requests.get('openCount', 0)
+        # Use direct GraphQL field for open PRs (not client-side calculated openCount)
+        open_pull_requests = repo_data.get('openPullRequests', {})
+        metadata['open_pr_count'] = open_pull_requests.get('totalCount', 0)
 
         # CODEOWNERS
         codeowners = repo_data.get('codeowners', {})
         metadata['codeowners_content'] = codeowners.get('content', '')
         metadata['ownership_confidence'] = codeowners.get('confidence', 0)
+
+        # Webhook health metrics (REST API collection)
+        repo_full_name = repo_data.get('nameWithOwner')
+        if repo_full_name:
+            webhook_metadata = self._collect_webhook_metadata(repo_full_name)
+            metadata.update(webhook_metadata)
+        else:
+            # Fallback if nameWithOwner not available
+            metadata.update({
+                'has_webhooks': False,
+                'active_webhooks_count': 0,
+                'webhook_cadence': 'Unknown',
+                'webhook_types': []
+            })
 
         return metadata
 

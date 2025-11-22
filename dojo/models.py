@@ -1679,6 +1679,60 @@ class Repository(models.Model):
                                                  verbose_name=_("Days Since Last Commit"),
                                                  help_text=_("Calculated: days elapsed since last commit"))
 
+    # Activity Metrics (Enterprise GitHub Management Insights)
+    commit_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Total Commits"),
+        help_text=_("Total number of commits in default branch")
+    )
+    open_issues_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Open Issues"),
+        help_text=_("Number of currently open issues")
+    )
+    open_pr_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Open Pull Requests"),
+        help_text=_("Number of currently open pull requests")
+    )
+
+    # Webhook Health Monitoring (Integration Health Check)
+    has_webhooks = models.BooleanField(
+        default=False,
+        verbose_name=_("Has Webhooks"),
+        help_text=_("Whether repository has any webhooks configured")
+    )
+    active_webhooks_count = models.IntegerField(
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name=_("Active Webhooks"),
+        help_text=_("Number of active webhooks configured")
+    )
+    webhook_cadence = models.CharField(
+        max_length=20,
+        default='Inactive',
+        choices=[
+            ('Hourly', 'Hourly'),
+            ('2 Hours', '2 Hours'),
+            ('Daily', 'Daily'),
+            ('Weekly', 'Weekly'),
+            ('Monthly', 'Monthly'),
+            ('Inactive', 'Inactive'),
+            ('Unknown', 'Unknown'),
+        ],
+        verbose_name=_("Webhook Cadence"),
+        help_text=_("Baseline webhook delivery frequency based on last 25 events")
+    )
+    webhook_types = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Webhook Types"),
+        help_text=_("Detected webhook integration types (JIRA, CI/CD, Slack, etc.)")
+    )
+
     # Repository Metadata
     readme_summary = models.TextField(max_length=500, blank=True,
                                      verbose_name=_("README Summary"),
@@ -5684,6 +5738,120 @@ class GitHubInsightConfiguration(models.Model):
 
     def __str__(self):
         return f"GitHub Insights Config for {self.user.username}"
+
+
+class GitHubSyncConfiguration(models.Model):
+    """
+    System-wide configuration for GitHub repository synchronization.
+
+    Stores GitHub authentication token, account information, and sync preferences.
+    Only one configuration record should exist per DefectDojo instance.
+    """
+
+    # Account type choices
+    ORGANIZATION = 'organization'
+    USER = 'user'
+    ACCOUNT_TYPE_CHOICES = (
+        (ORGANIZATION, _('Organization')),
+        (USER, _('Personal Account')),
+    )
+
+    # Sync schedule choices
+    MANUAL = 'manual'
+    DAILY = 'daily'
+    WEEKLY = 'weekly'
+    SYNC_SCHEDULE_CHOICES = (
+        (MANUAL, _('Manual (No Auto-Sync)')),
+        (DAILY, _('Daily')),
+        (WEEKLY, _('Weekly')),
+    )
+
+    # GitHub authentication (encrypted in production)
+    github_token = models.CharField(
+        max_length=255,
+        verbose_name=_("GitHub Personal Access Token"),
+        help_text=_("GitHub PAT with repo:read permissions (stored encrypted)")
+    )
+
+    # Account information
+    account_type = models.CharField(
+        max_length=20,
+        choices=ACCOUNT_TYPE_CHOICES,
+        default=ORGANIZATION,
+        verbose_name=_("Account Type"),
+        help_text=_("Type of GitHub account to sync (organization or personal account)")
+    )
+    account_name = models.CharField(
+        max_length=255,
+        verbose_name=_("Account Name"),
+        help_text=_("GitHub organization or user account name")
+    )
+
+    # Sync settings
+    auto_sync_enabled = models.BooleanField(
+        default=False,
+        verbose_name=_("Auto-Sync Enabled"),
+        help_text=_("Enable automatic repository synchronization")
+    )
+    sync_schedule = models.CharField(
+        max_length=20,
+        choices=SYNC_SCHEDULE_CHOICES,
+        default=MANUAL,
+        verbose_name=_("Sync Schedule"),
+        help_text=_("Frequency of automatic synchronization")
+    )
+    incremental_sync = models.BooleanField(
+        default=True,
+        verbose_name=_("Incremental Sync"),
+        help_text=_("Only sync repositories updated since last sync (recommended)")
+    )
+
+    # Sync history
+    last_sync = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Last Sync"),
+        help_text=_("Timestamp of last successful synchronization")
+    )
+    last_sync_status = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+        verbose_name=_("Last Sync Status"),
+        help_text=_("Status of last sync: success, failed, partial")
+    )
+    last_sync_error = models.TextField(
+        blank=True,
+        verbose_name=_("Last Sync Error"),
+        help_text=_("Error message from last failed sync")
+    )
+
+    # Statistics
+    total_repos_synced = models.IntegerField(
+        default=0,
+        verbose_name=_("Total Repositories Synced"),
+        help_text=_("Cumulative count of repositories synced")
+    )
+
+    # Metadata
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'github_sync_configuration'
+        verbose_name = _("GitHub Sync Configuration")
+        verbose_name_plural = _("GitHub Sync Configurations")
+
+    def __str__(self):
+        return f"GitHub Sync Config: {self.account_name} ({self.account_type})"
+
+    def save(self, *args, **kwargs):
+        """Ensure only one configuration exists."""
+        if not self.pk and GitHubSyncConfiguration.objects.exists():
+            # Update existing record instead of creating new one
+            existing = GitHubSyncConfiguration.objects.first()
+            self.pk = existing.pk
+        super().save(*args, **kwargs)
 
 
 # Audit logging registration is now handled in auditlog.py and configured in apps.py

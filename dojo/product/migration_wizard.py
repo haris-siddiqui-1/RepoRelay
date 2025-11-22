@@ -303,11 +303,18 @@ class ProductMigrationWizard:
             archived_products = []
 
             for group in groupings:
+                # Defensive validation: Ensure product_type_id is provided
+                if not group.get('product_type_id'):
+                    raise ValueError(
+                        f"Product '{group['product_name']}' missing required product_type_id. "
+                        f"This should have been caught by preview_migration validation."
+                    )
+
                 # Create new Product
                 new_product = Product.objects.create(
                     name=group['product_name'],
                     description=group.get('description', f"Migrated product grouping (migration {migration_id})"),
-                    prod_type_id=group.get('product_type_id'),
+                    prod_type_id=group['product_type_id'],
                     created=timezone.now(),
                     updated=timezone.now(),
                     # Set migration metadata
@@ -331,8 +338,9 @@ class ProductMigrationWizard:
                     updated_repositories.append(repo)
                     logger.info(f"Updated Repository: {repo.name} → Product {new_product.name}")
 
-                    # Mark old Product as placeholder (if not already migrated)
-                    if old_product and not old_product.is_repository_placeholder:
+                    # Mark old Product as placeholder and migrate engagements
+                    # Process regardless of current placeholder status to ensure migration metadata is set
+                    if old_product:
                         # CRITICAL FIX: Move all Engagements from old Product to new Product
                         # This preserves the Finding → Test → Engagement → Product chain
                         engagements = Engagement.objects.filter(product=old_product)
@@ -346,6 +354,7 @@ class ProductMigrationWizard:
                         if engagement_count > 0:
                             logger.info(f"Migrated {engagement_count} engagements from {old_product.name} to {new_product.name}")
 
+                        # Set migration metadata (works for both placeholder and non-placeholder Products)
                         old_product.is_repository_placeholder = True
                         old_product.migrated_to_product = new_product
                         old_product.migration_date = timezone.now()
