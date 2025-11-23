@@ -46,7 +46,7 @@ dojo/github_collector/
 **Features**:
 - GraphQL API v4 for bulk operations (15-20x faster incremental syncs)
 - Automatic REST API fallback for reliability
-- **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
+- **Partial Dual-Population Strategy**: Activity metrics (commit_count, open_issues_count, open_pr_count) sync to both Repository model (primary) and Product model (legacy compatibility). Webhook health fields are Repository-only.
 - Incremental sync (only fetch repositories updated since last sync)
 - 36 binary signals across 5 categories (deployment, production, development, organization, security)
 - Repository tier/criticality classification (tier1-tier4, archived)

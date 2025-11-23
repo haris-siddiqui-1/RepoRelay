@@ -28,7 +28,7 @@ The GitHub collector has been migrated from REST API v3 to GraphQL API v4 for im
 2. **`collector.py`** (Enhanced) - Repository sync orchestrator
    - GraphQL support with `use_graphql=True` parameter
    - Automatic REST fallback on errors
-   - **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
+   - **Partial Dual-Population Strategy**: Activity metrics (commit_count, open_issues_count, open_pr_count) sync to both Repository model (primary) and Product model (legacy compatibility). Webhook health fields are Repository-only.
    - **REST Sync Path**: `_get_or_create_repository_from_rest()` mirrors GraphQL path for individual repository syncs (fixed November 2025)
    - **GraphQL Sync Path**: `_get_or_create_repository_from_graphql()` handles bulk organization syncs
    - Incremental sync logic (only fetch changed repos)
@@ -269,7 +269,7 @@ GitHub users can hide email addresses:
 - ✅ Can switch between GraphQL and REST with `use_graphql` parameter
 - ✅ Individual product sync still uses REST (real-time updates)
 - ✅ All 36 binary signals produce identical results
-- ✅ **Dual-Population Strategy**: Both GraphQL and REST paths populate Repository + Product models identically (fixed November 2025)
+- ✅ **Partial Dual-Population Strategy**: Both GraphQL and REST paths populate Repository model fully. Activity metrics (commit_count, open_issues_count, open_pr_count) are also synced to Product model for legacy compatibility. Webhook health fields are Repository-only. (fixed November 2025)
 - ✅ **REST Sync Parity**: REST path now mirrors GraphQL path with full enrichment field population (collector.py:930-1050)
 
 ### Performance Comparison
@@ -291,14 +291,15 @@ GitHub users can hide email addresses:
 
 ## Data Integrity & Security
 
-### Dual-Population Strategy (November 2025)
+### Partial Dual-Population Strategy (November 2025)
 
-Both GraphQL and REST sync paths now populate data to **both** Repository and Product models:
+Both GraphQL and REST sync paths populate the Repository model with all 47 enrichment fields. Activity metrics are also synced to the Product model for legacy compatibility:
 
-**Why Dual-Population?**
-- **Repository Model**: Primary storage for GitHub enrichment data (47 fields)
-- **Product Model**: Legacy compatibility for existing DefectDojo workflows
-- **Data Consistency**: Ensures both models stay synchronized during sync operations
+**Why Partial Dual-Population?**
+- **Repository Model**: Primary storage for all GitHub enrichment data (47 fields including activity metrics + webhook health)
+- **Product Model**: Legacy compatibility - receives only activity metrics (commit_count, open_issues_count, open_pr_count)
+- **Webhook Fields**: Repository-only (has_webhooks, active_webhooks_count, webhook_cadence, webhook_types) - NOT synced to Product
+- **Data Consistency**: Ensures activity metrics stay synchronized between models during sync operations
 
 **Implementation Details:**
 - GraphQL path: `_get_or_create_repository_from_graphql()` (collector.py:820-928)

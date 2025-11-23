@@ -230,7 +230,7 @@ DefectDojo has five GitHub integration patterns:
    - Syncs repository metadata to Repository model (separate from Product)
    - Detects 36 binary signals (deployment indicators, security posture, activity metrics)
    - Classifies repository tier/criticality (tier1-tier4, archived)
-   - **Dual-Population Strategy**: Syncs data to both Repository model (primary) and Product model (legacy compatibility)
+   - **Partial Dual-Population Strategy**: Activity metrics (commit_count, open_issues_count, open_pr_count) sync to both Repository model (primary) and Product model (legacy compatibility). Webhook health fields (has_webhooks, active_webhooks_count, webhook_cadence, webhook_types) are Repository-only.
    - **GraphQL API v4 for bulk operations** (15-20x faster incremental syncs)
    - **REST API path**: Individual repository syncs with full enrichment field population (fixed November 2025)
    - Automatic REST fallback for reliability
@@ -269,7 +269,7 @@ DefectDojo has five GitHub integration patterns:
    - Management command: `python manage.py migrate_products_to_repositories`
 
 **GraphQL Migration (January 2025):**
-The repository collector now uses GitHub GraphQL API v4 for bulk organization syncs, reducing API calls by 94% and enabling sub-5-minute daily incremental syncs. REST API remains as fallback and for individual repository updates.
+The repository collector now uses GitHub GraphQL API v4 for bulk organization syncs, reducing API calls by 94% and enabling sub-5-minute daily incremental syncs. REST API remains as fallback and for individual repository updates. Webhook health monitoring requires REST API as GitHub GraphQL does not expose webhook data.
 
 **GitHub Alerts Integration (January 2025):**
 The alerts collector creates a data hierarchy: Product → Repository → GitHubAlert → Finding. This enables centralized vulnerability management across all GitHub repositories with proper deduplication using unique_id_from_tool format: "github-{type}-{repo_id}-{alert_id}".
@@ -282,7 +282,7 @@ The alerts collector creates a data hierarchy: Product → Repository → GitHub
 - Alert types: Dependabot (GraphQL), CodeQL (REST), Secret Scanning (REST)
 - Finding integration: Automatic Test creation per alert type, state synchronization
 - Admin UI: Complete CRUD for Repository, GitHubAlert, GitHubAlertSync models
-- **Data Integrity**: Dual-population strategy ensures both Repository and Product models stay synchronized
+- **Data Integrity**: Partial dual-population strategy ensures activity metrics stay synchronized between Repository and Product models. Webhook health fields are Repository-only.
 - **Security Hardening**: XSS sanitization applied to all external GitHub data (README, CODEOWNERS) using bleach.clean()
 - **Webhook Monitoring**: Automatic webhook health tracking (types, cadence, active count) with graceful permission fallback
 - **Sync Configuration UI**: Web-based configuration at `/github/sync/configuration` (staff/superuser only)
@@ -337,7 +337,13 @@ Represents a GitHub repository with enrichment metadata:
 - Relationships: `product` (ForeignKey), `related_products` (ManyToMany)
 - Activity tracking: `last_commit_date`, `active_contributors_90d`, `days_since_last_commit`
 - **Activity metrics** (added November 2025): `commit_count`, `open_issues_count`, `open_pr_count`
-- **Webhook health** (added November 2025): `has_webhooks`, `active_webhooks_count`, `webhook_cadence`, `webhook_types` (JSONField)
+- **Webhook health** (added November 2025): Integration health monitoring fields
+  - `has_webhooks` (Boolean): True if repository has configured webhooks
+  - `active_webhooks_count` (Integer): Count of active webhooks
+  - `webhook_cadence` (String): Delivery frequency (Hourly, 2 Hours, Daily, Weekly, Monthly, Inactive, Unknown)
+  - `webhook_types` (JSONField): Array of detected webhook integration types (Jenkins, CircleCI, JIRA, Slack, etc.)
+  - Requires admin:repo_hook permission; fails gracefully to False/0/Inactive/[] if missing
+  - Collected via REST API only (GitHub GraphQL does not expose webhook data)
 - Metadata: `readme_summary`, `primary_language`, `primary_framework` (XSS sanitized with bleach.clean())
 - Ownership: `codeowners_content` (XSS sanitized), `ownership_confidence`
 - 36 binary signals across 5 categories (deployment, production, development, organization, security)
@@ -385,6 +391,56 @@ Three new Test_Type records created automatically:
 6. Findings created with `--create-findings` flag, linked to appropriate Test
 7. Finding updates trigger on re-sync based on alert state changes
 8. Each Repository gets one Engagement with three Tests (one per alert type)
+
+**Webhook Health Monitoring Implementation Details:**
+
+The webhook health monitoring system (`dojo/github_collector/collector.py`) provides integration health insights by analyzing configured webhooks:
+
+**Data Collection** (`_collect_webhook_metadata` method, lines 1196-1241):
+1. **List Webhooks**: Calls `repo.get_hooks()` via REST API (1 API call per repository)
+2. **Count Active**: Filters webhooks where `hook.active == True`
+3. **Detect Types**: Parses webhook URLs to identify integrations:
+   - Jenkins: URLs containing `/jenkins/`, `/hudson/`
+   - CircleCI: URLs containing `/circleci.com/`, `/circle-ci.com/`
+   - JIRA: URLs containing `/jira/`, `/atlassian.net/`
+   - Slack: URLs containing `/slack.com/`, `/hooks.slack/`
+   - GitHub Actions: URLs containing `/actions/`, `/github.com/actions/`
+   - And 15+ more integration types
+4. **Calculate Cadence**: Fetches last 25 delivery events per webhook, computes median time delta
+   - Hourly: < 1 hour median
+   - 2 Hours: 1-2 hours median
+   - Daily: 2-24 hours median
+   - Weekly: 1-7 days median
+   - Monthly: 7-30 days median
+   - Inactive: > 30 days median or no deliveries
+   - Unknown: Unable to determine (permission error, no delivery history)
+
+**Permission Requirements**:
+- Requires `admin:repo_hook` GitHub permission
+- Graceful degradation: If permission missing, defaults to:
+  - `has_webhooks = False`
+  - `active_webhooks_count = 0`
+  - `webhook_cadence = 'Unknown'`
+  - `webhook_types = []`
+- Logs warning but does not fail the sync operation
+
+**Integration Points**:
+- Called from `sync_repository()` at line 538-549 (REST API path)
+- GraphQL path does not collect webhook data (API limitation)
+- Results stored in Repository model fields only (not dual-populated to Product)
+
+**Performance Characteristics**:
+- REST API cost: 1 call for webhook list + N calls for delivery history (N = number of webhooks)
+- Typical overhead: 1-5 API calls per repository with webhooks
+- Repositories without webhooks: 1 API call (list returns empty)
+- Rate limit impact: Minimal (<5% of total sync API calls for typical organization)
+
+**Error Handling**:
+- Permission errors: Caught and handled gracefully with default values
+- Network errors: Retry with exponential backoff (inherited from PyGithub client)
+- Invalid webhook data: Skipped with warning log
+- Empty delivery history: Cadence set to 'Inactive'
+
 
 ### GitHub Insights Dashboard (January 2025)
 

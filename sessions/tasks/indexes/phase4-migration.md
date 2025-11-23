@@ -9,7 +9,6 @@ description: Tasks related to Phase 4 implementation - repository clustering, pr
 ## Active Tasks
 
 ### High Priority
-- `h-test-repository-activity-comprehensive-review.md` - Comprehensive review of Repository activity implementation including requirements validation, code review, Chrome DevTools UI testing, database validation, gap analysis, and CLAUDE.md optimization
 
 ### Medium Priority
 
@@ -18,6 +17,7 @@ description: Tasks related to Phase 4 implementation - repository clustering, pr
 ### Investigate
 
 ## Completed Tasks
+- `h-test-repository-activity-comprehensive-review.md` - Comprehensive review of Repository activity implementation including requirements validation, code review, Chrome DevTools UI testing, database validation, gap analysis, and CLAUDE.md optimization (webhook cadence bug discovered and fixed, partial dual-population terminology standardized across all docs)
 - `h-fix-validate-repository-activity.md` - Fixed critical bugs in Repository activity data population and completed validation phases 6-8 (dual-population strategy, webhook integration, XSS sanitization, 100% data integrity validated)
 - `h-validate-repository-activity-implementation.md` - Validation task that discovered critical bugs in Repository data population (superseded by h-fix-validate-repository-activity.md)
 - `h-fix-repository-activity-bugs.md` - Bug documentation task detailing data flow issues (incorporated into h-fix-validate-repository-activity.md)
