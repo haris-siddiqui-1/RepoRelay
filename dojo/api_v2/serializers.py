@@ -106,6 +106,7 @@ from dojo.models import (
     Test_Type,
     TextAnswer,
     TextQuestion,
+    TriageHistory,
     Tool_Configuration,
     Tool_Product_Settings,
     Tool_Type,
@@ -2809,6 +2810,172 @@ class FindingCloseSerializer(serializers.ModelSerializer):
                 })
 
         return data
+
+
+# --- Triage Workflow Serializers (Phase 2) ---
+
+class TriageHistorySerializer(serializers.ModelSerializer):
+    """Serializer for TriageHistory audit trail records."""
+    performed_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    performed_by_username = serializers.CharField(
+        source='performed_by.username',
+        read_only=True,
+        allow_null=True
+    )
+
+    class Meta:
+        model = TriageHistory
+        fields = (
+            'id',
+            'finding',
+            'action',
+            'previous_state',
+            'new_state',
+            'reason',
+            'rule_name',
+            'confidence',
+            'performed_by',
+            'performed_by_username',
+            'performed_at',
+        )
+        read_only_fields = fields
+
+
+class TriageActionSerializer(serializers.Serializer):
+    """Serializer for performing triage actions on findings."""
+    action = serializers.ChoiceField(
+        choices=['escalate', 'assign', 'defer', 'accept', 'dismiss', 'reopen'],
+        help_text="Triage action to perform"
+    )
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Reason for the triage decision (required for accept/dismiss)"
+    )
+    assigned_to = serializers.PrimaryKeyRelatedField(
+        queryset=Dojo_User.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="User to assign the finding to (required for assign action)"
+    )
+    due_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Due date for deferred findings"
+    )
+
+    def validate(self, data):
+        action = data.get('action')
+        reason = data.get('reason')
+        assigned_to = data.get('assigned_to')
+
+        # Require reason for accept/dismiss actions
+        if action in ('accept', 'dismiss') and not reason:
+            raise serializers.ValidationError({
+                'reason': f"Reason is required for '{action}' action"
+            })
+
+        # Require assigned_to for assign action
+        if action == 'assign' and not assigned_to:
+            raise serializers.ValidationError({
+                'assigned_to': "assigned_to is required for 'assign' action"
+            })
+
+        return data
+
+
+class TriageActionResponseSerializer(serializers.ModelSerializer):
+    """Response serializer for triage action showing updated finding state."""
+    triage_assigned_to_username = serializers.CharField(
+        source='triage_assigned_to.username',
+        read_only=True,
+        allow_null=True
+    )
+    valid_actions = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Finding
+        fields = (
+            'id',
+            'title',
+            'severity',
+            'triage_state',
+            'triage_assigned_to',
+            'triage_assigned_to_username',
+            'triage_due_date',
+            'triage_reason',
+            'auto_triage_rule',
+            'auto_triage_confidence',
+            'priority_score',
+            'priority_bucket',
+            'valid_actions',
+        )
+
+    def get_valid_actions(self, obj):
+        from dojo.finding.triage_service import get_valid_actions
+        return get_valid_actions(obj.triage_state or 'pending')
+
+
+class BulkTriageSerializer(serializers.Serializer):
+    """Serializer for bulk triage operations."""
+    finding_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=1,
+        help_text="List of Finding IDs to triage"
+    )
+    action = serializers.ChoiceField(
+        choices=['escalate', 'assign', 'defer', 'accept', 'dismiss', 'reopen'],
+        help_text="Triage action to perform on all findings"
+    )
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Reason for the triage decision"
+    )
+    assigned_to = serializers.PrimaryKeyRelatedField(
+        queryset=Dojo_User.objects.all(),
+        required=False,
+        allow_null=True,
+        help_text="User to assign findings to (for assign action)"
+    )
+    due_date = serializers.DateField(
+        required=False,
+        allow_null=True,
+        help_text="Due date for deferred findings"
+    )
+
+    def validate(self, data):
+        action = data.get('action')
+        reason = data.get('reason')
+        assigned_to = data.get('assigned_to')
+
+        # Require reason for accept/dismiss actions
+        if action in ('accept', 'dismiss') and not reason:
+            raise serializers.ValidationError({
+                'reason': f"Reason is required for '{action}' action"
+            })
+
+        # Require assigned_to for assign action
+        if action == 'assign' and not assigned_to:
+            raise serializers.ValidationError({
+                'assigned_to': "assigned_to is required for 'assign' action"
+            })
+
+        return data
+
+
+class BulkTriageResponseSerializer(serializers.Serializer):
+    """Response serializer for bulk triage operations."""
+    success_count = serializers.IntegerField()
+    error_count = serializers.IntegerField()
+    filtered_count = serializers.IntegerField(
+        required=False,
+        help_text="Number of findings filtered out due to authorization"
+    )
+    errors = serializers.ListField(
+        child=serializers.DictField(),
+        required=False
+    )
 
 
 class ReportGenerateOptionSerializer(serializers.Serializer):

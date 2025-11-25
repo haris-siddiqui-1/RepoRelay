@@ -957,6 +957,128 @@ class FindingViewSet(
         serialized_finding = serializers.FindingCloseSerializer(finding, context={"request": request})
         return Response(serialized_finding.data)
 
+    # --- Triage Workflow Actions (Phase 2) ---
+
+    @extend_schema(
+        methods=["POST"],
+        request=serializers.TriageActionSerializer,
+        responses={status.HTTP_200_OK: serializers.TriageActionResponseSerializer},
+        description="Perform a triage action on a finding. Valid actions depend on current state.",
+    )
+    @action(detail=True, methods=["post"])
+    def triage(self, request, pk=None):
+        """
+        Perform a triage action on a finding.
+
+        Valid actions:
+        - pending -> escalate, assign, defer, accept, dismiss
+        - escalated -> assign
+        - assigned -> defer, accept, dismiss
+        - deferred -> reopen, assign
+        - dismissed -> reopen
+        - accepted -> reopen
+        """
+        from dojo.finding.triage_service import perform_triage_action, validate_triage_action
+        from django.core.exceptions import ValidationError
+
+        finding = self.get_object()
+
+        serializer = serializers.TriageActionSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        action = serializer.validated_data['action']
+        reason = serializer.validated_data.get('reason')
+        assigned_to = serializer.validated_data.get('assigned_to')
+        due_date = serializer.validated_data.get('due_date')
+
+        try:
+            perform_triage_action(
+                finding=finding,
+                action=action,
+                user=request.user,
+                reason=reason,
+                assigned_to=assigned_to,
+                due_date=due_date,
+            )
+        except ValidationError as e:
+            # Django ValidationError uses .messages (list), not .message
+            error_msg = e.messages[0] if hasattr(e, 'messages') and e.messages else str(e)
+            return Response(
+                {'error': error_msg},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Refresh and return updated finding
+        finding.refresh_from_db()
+        response_serializer = serializers.TriageActionResponseSerializer(
+            finding, context={"request": request}
+        )
+        return Response(response_serializer.data)
+
+    @extend_schema(
+        methods=["GET"],
+        responses={status.HTTP_200_OK: serializers.TriageHistorySerializer(many=True)},
+        description="Get triage history for a finding.",
+    )
+    @action(detail=True, methods=["get"])
+    def triage_history(self, request, pk=None):
+        """Get the triage audit trail for a finding."""
+        from dojo.models import TriageHistory
+
+        finding = self.get_object()
+        history = TriageHistory.objects.filter(finding=finding).order_by('-performed_at')
+
+        page = self.paginate_queryset(history)
+        if page is not None:
+            serializer = serializers.TriageHistorySerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = serializers.TriageHistorySerializer(history, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        methods=["POST"],
+        request=serializers.BulkTriageSerializer,
+        responses={status.HTTP_200_OK: serializers.BulkTriageResponseSerializer},
+        description="Perform bulk triage action on multiple findings.",
+    )
+    @action(detail=False, methods=["post"])
+    def bulk_triage(self, request):
+        """
+        Perform a triage action on multiple findings at once.
+
+        Returns success/error counts and details for any failed operations.
+        Unauthorized findings are filtered out silently (not included in results).
+        """
+        from dojo.finding.triage_service import bulk_triage
+
+        serializer = serializers.BulkTriageSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Filter to only findings the user has access to (via get_queryset permissions)
+        requested_ids = serializer.validated_data['finding_ids']
+        authorized_findings = self.get_queryset().filter(id__in=requested_ids)
+        authorized_ids = list(authorized_findings.values_list('id', flat=True))
+
+        result = bulk_triage(
+            finding_ids=authorized_ids,
+            action=serializer.validated_data['action'],
+            user=request.user,
+            reason=serializer.validated_data.get('reason'),
+            assigned_to=serializer.validated_data.get('assigned_to'),
+            due_date=serializer.validated_data.get('due_date'),
+        )
+
+        # Add count of unauthorized/filtered findings
+        filtered_count = len(requested_ids) - len(authorized_ids)
+        if filtered_count > 0:
+            result['filtered_count'] = filtered_count
+
+        response_serializer = serializers.BulkTriageResponseSerializer(result)
+        return Response(response_serializer.data)
+
     @extend_schema(
         methods=["GET"],
         responses={status.HTTP_200_OK: serializers.TagSerializer},

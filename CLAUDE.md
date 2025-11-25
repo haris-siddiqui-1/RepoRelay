@@ -154,7 +154,7 @@ Each feature module follows a consistent pattern:
 - API integration in `api_v2/`
 
 **Key Modules:**
-- `dojo/finding/` - Core vulnerability management with complex deduplication logic (dojo/finding/helper.py:712) and priority scoring (dojo/finding/priority_scorer.py)
+- `dojo/finding/` - Core vulnerability management with complex deduplication logic (dojo/finding/helper.py:712), priority scoring (dojo/finding/priority_scorer.py), and triage workflow (dojo/finding/triage_service.py)
 - `dojo/importers/` - Scan file parsing framework (base_importer.py, default_importer.py, default_reimporter.py)
 - `dojo/tools/` - 211 security tool parsers (each with parser.py implementing get_fields, get_dedupe_fields, get_scan_types)
 - `dojo/authorization/` - RBAC with roles: Reader, API_Importer, Writer, Maintainer, Owner
@@ -183,6 +183,9 @@ Each feature module follows a consistent pattern:
 - `/products/`, `/engagements/`, `/tests/`, `/findings/`
 - `/scan-imports/`, `/re-scan-imports/` - Bulk vulnerability import/update
 - `/github_insights/` - GitHub repository insights and dashboard configuration
+- `/findings/{id}/triage/` - Triage workflow actions (POST)
+- `/findings/{id}/triage_history/` - Triage audit trail (GET)
+- `/findings/bulk_triage/` - Bulk triage operations (POST)
 - Pagination, filtering (django-filter), and bulk operations supported
 
 ### Settings & Configuration
@@ -350,7 +353,14 @@ GitHub alerts use a standardized unique_id_from_tool format:
 - Re-imports automatically update existing findings based on this identifier
 - State changes (open→dismissed→fixed) sync bidirectionally between GitHub and DefectDojo
 
-### Priority Scoring System (January 2025)
+### Vulnerability Prioritization Strategy (January 2025)
+
+DefectDojo implements a comprehensive vulnerability prioritization and triage system that combines business context, security intelligence, and automated decision-making to manage large-scale vulnerability backlogs.
+
+**Strategy Reference:** `sessions/docs/vulnerability-prioritization-strategy.md`
+
+#### Priority Scoring System
+
 Automated vulnerability prioritization based on tier, severity, and risk modifiers:
 - Located in `dojo/finding/priority_scorer.py`
 - Three Finding fields: `priority_score` (integer), `priority_bucket` (P0-P4), `priority_calculated_at` (timestamp)
@@ -358,10 +368,45 @@ Automated vulnerability prioritization based on tier, severity, and risk modifie
 - Tier weights: tier1 (5.0), tier2 (3.5), tier3 (2.0), tier4 (1.0), archived (0.2)
 - Severity scores: Critical (100), High (75), Medium (50), Low (25), Info (10)
 - Priority buckets: P0 (≥500), P1 (300-499), P2 (150-299), P3 (50-149), P4 (<50)
-- Positive modifiers: KEV (+150), Ransomware (+100), High EPSS (+75), SLA Breach (+50)
-- Negative modifiers: Very Low EPSS (-50), Dormant Repo (-40), No Production (-30)
+- Positive modifiers: KEV (+150), Ransomware (+100), High EPSS (+75), SLA Breach (+50), Fix Available (+30), Production Signals (+25), Active Webhooks (+15)
+- Negative modifiers: Very Low EPSS (-50), Dormant Repo (-40), No Production (-30), No Fix (-20)
 - Async calculation via Celery task `calculate_finding_priority_task()`
 - Batch processing via management command `python manage.py calculate_priority_scores`
+
+#### Triage Workflow System
+
+Manual and automated triage capabilities with full audit trail:
+- Located in `dojo/finding/triage_service.py`
+- Six Finding triage fields: `triage_state`, `triage_assigned_to`, `triage_due_date`, `triage_reason`, `auto_triage_rule`, `auto_triage_confidence`
+- State machine: pending → escalated → assigned → deferred/accepted/dismissed
+- Valid actions: escalate, assign, defer, accept, dismiss, reopen
+- TriageHistory model tracks all triage decisions (action, previous_state, new_state, reason, rule_name, confidence, performed_by, performed_at)
+- Integration with AutoTriageEngine (`dojo/auto_triage/engine.py`) - 16 rules combining tier + severity + EPSS
+- Auto-triage rules populate `auto_triage_rule` and `auto_triage_confidence` fields
+- Backfill migration maps legacy flags: `risk_accepted=True` → `triage_state='accepted'`, `under_review=True` → `triage_state='assigned'`
+
+**Triage Service Functions:**
+- `perform_auto_triage(finding, save=True)` - Auto-triage single finding with state updates
+- `perform_triage_action(finding, action, user, reason, assigned_to, due_date)` - Manual triage with validation
+- `bulk_triage(findings, action, user, reason, assigned_to, due_date)` - Batch triage operations
+- `get_valid_actions(current_state)` - State transition validation
+
+**REST API Endpoints:**
+- `POST /api/v2/findings/{id}/triage/` - Perform single triage action
+- `GET /api/v2/findings/{id}/triage_history/` - Retrieve audit trail
+- `POST /api/v2/findings/bulk_triage/` - Bulk triage operations (RBAC-enforced via get_queryset)
+
+**Database Migrations:**
+- Migration 0260: Adds 6 triage workflow fields to Finding model
+- Migration 0261: Creates TriageHistory model with audit trail
+- Migration 0262: Backfills triage_state from legacy flags (risk_accepted, under_review, auto_triage_decision)
+
+**Design Principles:**
+- **Business Context First**: Repository tier drives prioritization, not just CVE severity
+- **Automated Decision Support**: Auto-triage suggests actions but requires human approval for risk acceptance
+- **Full Audit Trail**: TriageHistory records every state change (who, when, why, confidence)
+- **Backward Compatibility**: Legacy `auto_triage_decision`, `risk_accepted`, `under_review` fields preserved
+- **State Transition Validation**: Invalid transitions rejected (e.g., dismissed → escalated requires reopening first)
 
 ### GitHub Data Models (January 2025)
 
@@ -409,6 +454,16 @@ Singleton configuration for GitHub repository synchronization:
 - Status tracking: `last_sync`, `last_sync_status`, `last_sync_error`
 - Singleton pattern: Only one configuration record exists (pk=1)
 - Associated view: `/github/sync/configuration` (staff/superuser only)
+
+**TriageHistory Model** (`dojo/models.py`) - NEW (January 2025)
+Audit trail for vulnerability triage decisions:
+- Core fields: `finding` (ForeignKey), `action` (created/auto_triaged/escalated/assigned/deferred/accepted/dismissed/reopened)
+- State tracking: `previous_state`, `new_state` (CharField, triage_state values)
+- Metadata: `reason` (TextField), `rule_name` (CharField), `confidence` (IntegerField 0-100)
+- Audit: `performed_by` (ForeignKey to Dojo_User), `performed_at` (DateTimeField auto_now_add)
+- Ordering: Descending by `performed_at` for chronological audit trail
+- Related name: `finding.triage_history.all()` retrieves complete history
+- Use cases: Compliance auditing, triage effectiveness analysis, auto-triage rule tuning
 
 **Test Types for GitHub Alerts:**
 Three new Test_Type records created automatically:

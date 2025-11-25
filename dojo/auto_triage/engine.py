@@ -201,23 +201,45 @@ class AutoTriageEngine:
         """
         Evaluate rules and apply triage decision to a single finding.
 
+        Updates both legacy auto_triage_* fields and new triage workflow fields.
+        Creates TriageHistory record for audit trail.
+
         Args:
             finding: Finding instance
         """
+        from dojo.finding.triage_service import perform_auto_triage
+
         # Get triage decision
         decision_data = self.triage_single_finding(finding)
 
-        # Skip if decision unchanged
+        # Skip if decision unchanged (check legacy field for compatibility)
         if finding.auto_triage_decision == decision_data['decision']:
             self.stats['pending'] += 1
             return
 
-        # Apply decision
+        # Apply decision using triage service (handles new workflow fields + history)
         with transaction.atomic():
+            # Update legacy fields for backward compatibility
             finding.auto_triage_decision = decision_data['decision']
             finding.auto_triage_reason = f"{decision_data['reason']} (Rule: {decision_data['rule_name']}, Confidence: {decision_data['confidence']}%)"
             finding.auto_triaged_at = timezone.now()
-            finding.save(update_fields=['auto_triage_decision', 'auto_triage_reason', 'auto_triaged_at'])
+
+            # Update new triage workflow fields and create history record
+            # Pass save=False to avoid double-save; we'll save all fields together
+            perform_auto_triage(
+                finding=finding,
+                decision=decision_data['decision'],
+                rule_name=decision_data['rule_name'],
+                reason=decision_data['reason'],
+                confidence=decision_data['confidence'],
+                save=False,
+            )
+
+            # Single save with both legacy and new fields
+            finding.save(update_fields=[
+                'auto_triage_decision', 'auto_triage_reason', 'auto_triaged_at',
+                'triage_state', 'triage_reason', 'auto_triage_rule', 'auto_triage_confidence',
+            ])
 
         # Update stats
         if decision_data['decision'] == TriageDecision.DISMISS:

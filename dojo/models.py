@@ -3577,6 +3577,44 @@ class Finding(models.Model):
                                                   verbose_name=_("Priority Calculated At"),
                                                   help_text=_("Timestamp when priority score was last calculated"))
 
+    # Triage Workflow Fields - Phase 2 of Vulnerability Prioritization Strategy
+    TRIAGE_STATE_CHOICES = (
+        ('pending', _('Pending Triage')),
+        ('escalated', _('Escalated')),
+        ('assigned', _('Assigned')),
+        ('deferred', _('Deferred')),
+        ('accepted', _('Risk Accepted')),
+        ('dismissed', _('Dismissed')),
+    )
+    triage_state = models.CharField(max_length=20,
+                                    choices=TRIAGE_STATE_CHOICES,
+                                    default='pending',
+                                    db_index=True,
+                                    verbose_name=_("Triage State"),
+                                    help_text=_("Current triage workflow state"))
+    triage_assigned_to = models.ForeignKey('Dojo_User',
+                                           null=True,
+                                           blank=True,
+                                           on_delete=models.SET_NULL,
+                                           related_name='assigned_findings',
+                                           verbose_name=_("Triage Assigned To"),
+                                           help_text=_("User assigned to triage this finding"))
+    triage_due_date = models.DateField(null=True,
+                                       blank=True,
+                                       verbose_name=_("Triage Due Date"),
+                                       help_text=_("Due date for triage completion"))
+    triage_reason = models.TextField(blank=True,
+                                     verbose_name=_("Triage Reason"),
+                                     help_text=_("Reason for triage decision"))
+    auto_triage_rule = models.CharField(max_length=100,
+                                        blank=True,
+                                        verbose_name=_("Auto-Triage Rule"),
+                                        help_text=_("Name of the auto-triage rule that was applied"))
+    auto_triage_confidence = models.IntegerField(null=True,
+                                                 blank=True,
+                                                 verbose_name=_("Auto-Triage Confidence"),
+                                                 help_text=_("Confidence score (0-100) of the auto-triage decision"))
+
     found_by = models.ManyToManyField(Test_Type,
                                       editable=False,
                                       verbose_name=_("Found by"),
@@ -4825,6 +4863,88 @@ class Risk_Acceptance(models.Model):
             new_accepted_findings = Finding.objects.filter(test__engagement=engagement, hash_code__in=old_accepted_findings_hash_codes, risk_accepted=True).distinct()
             copy.accepted_findings.set(new_accepted_findings)
         return copy
+
+
+class TriageHistory(models.Model):
+    """
+    Audit trail for triage decisions on findings.
+
+    Records both manual triage actions and auto-triage decisions,
+    enabling full traceability of vulnerability management workflow.
+    """
+    TRIAGE_ACTION_CHOICES = (
+        ('created', _('Created')),
+        ('auto_triaged', _('Auto-Triaged')),
+        ('escalated', _('Escalated')),
+        ('assigned', _('Assigned')),
+        ('deferred', _('Deferred')),
+        ('accepted', _('Risk Accepted')),
+        ('dismissed', _('Dismissed')),
+        ('reopened', _('Reopened')),
+    )
+
+    finding = models.ForeignKey(
+        Finding,
+        on_delete=models.CASCADE,
+        related_name='triage_history',
+        verbose_name=_("Finding"),
+        help_text=_("Finding this triage action applies to")
+    )
+    action = models.CharField(
+        max_length=20,
+        choices=TRIAGE_ACTION_CHOICES,
+        verbose_name=_("Action"),
+        help_text=_("Type of triage action performed")
+    )
+    previous_state = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name=_("Previous State"),
+        help_text=_("Triage state before this action")
+    )
+    new_state = models.CharField(
+        max_length=20,
+        verbose_name=_("New State"),
+        help_text=_("Triage state after this action")
+    )
+    reason = models.TextField(
+        blank=True,
+        verbose_name=_("Reason"),
+        help_text=_("Reason provided for the triage decision")
+    )
+    rule_name = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Rule Name"),
+        help_text=_("Name of auto-triage rule that was applied (if auto-triaged)")
+    )
+    confidence = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name=_("Confidence"),
+        help_text=_("Confidence score (0-100) of auto-triage decision")
+    )
+    performed_by = models.ForeignKey(
+        Dojo_User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name=_("Performed By"),
+        help_text=_("User who performed the action (null for auto-triage)")
+    )
+    performed_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Performed At"),
+        help_text=_("Timestamp when the action was performed")
+    )
+
+    class Meta:
+        ordering = ['-performed_at']
+        verbose_name = _("Triage History")
+        verbose_name_plural = _("Triage History")
+
+    def __str__(self):
+        return f"{self.finding_id}: {self.action} -> {self.new_state} at {self.performed_at}"
 
 
 class FileAccessToken(models.Model):
