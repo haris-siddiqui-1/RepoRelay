@@ -408,6 +408,99 @@ Manual and automated triage capabilities with full audit trail:
 - **Backward Compatibility**: Legacy `auto_triage_decision`, `risk_accepted`, `under_review` fields preserved
 - **State Transition Validation**: Invalid transitions rejected (e.g., dismissed → escalated requires reopening first)
 
+#### Triage Dashboard (Phase 3 - January 2025)
+
+Modern vulnerability triage interface with priority queue and analytics dashboard:
+
+**URL Routes:**
+- `/triage/queue` - Priority-sorted findings DataTable with bulk actions
+- `/triage/dashboard` - Analytics dashboard with KPIs, charts, and action widgets
+
+**View Functions** (`dojo/finding/views.py`):
+- `triage_queue()` (lines 3362-3453) - Serializes findings with priority/tier data for DataTable
+- `triage_dashboard()` (lines 3456-3638) - Aggregates KPIs, charts, and action items
+
+**Templates:**
+- `dojo/templates/dojo/triage_queue_modern.html` - DataTable with filter panel and bulk triage controls
+- `dojo/templates/dojo/triage_dashboard_modern.html` - Widget-based dashboard layout
+
+**Triage Queue Features:**
+1. **Priority-Sorted DataTable** - Virtual scrolling with 1000+ finding support
+2. **Filter Controls** - Priority bucket, triage state, severity, tier filters
+3. **DataTable Columns**:
+   - Priority Score (colored badge by bucket: P0-P4)
+   - Finding Title (link to detail view)
+   - Repository (tier badge)
+   - Severity (colored badge)
+   - EPSS Score (visual bar: red >0.5, amber 0.2-0.5, green <0.2)
+   - KEV Status (icon indicator)
+   - Age (days since creation)
+   - SLA Status (breached/approaching/ok)
+   - Triage State (pending/escalated/assigned/deferred/accepted/dismissed)
+4. **Bulk Triage Actions** - Sticky bottom bar with action buttons:
+   - Escalate (orange accent)
+   - Assign (blue accent with user selector)
+   - Defer (violet accent with date picker)
+   - Accept Risk (green accent with reason required)
+   - Dismiss (gray accent with reason required)
+5. **User Assignment** - Dropdown populated from active Dojo_User records
+6. **Performance** - Query optimization with select_related/prefetch_related for Repository tier access
+7. **Authorization** - Uses `get_authorized_findings()` for RBAC enforcement
+
+**Triage Dashboard Features:**
+1. **KPI Cards** (4-column grid, responsive 2-column on tablet):
+   - Total Open Findings (critical color accent)
+   - P0/P1 Count (warning color accent)
+   - SLA Breaches (critical color accent)
+   - Triage Rate (findings/day average over 7 days, info color accent)
+2. **Chart Widgets**:
+   - Priority Distribution (pie chart) - P0-P4 buckets with color scheme
+   - Severity Distribution (bar chart) - Critical/High/Medium/Low/Info
+   - Trend Over Time (line chart) - Last 30 days of finding creation
+3. **Action Widgets** (top 10 items each):
+   - SLA Approaching (within 7 days) - Sorted by expiration date
+   - KEV Matches (known exploited vulnerabilities) - Sorted by priority score
+   - High EPSS Findings (EPSS >= 0.5) - Sorted by EPSS score descending
+   - Stale Findings (pending > 30 days) - Sorted by age ascending
+4. **Action Item Display**:
+   - Icon with severity/criticality color coding
+   - Finding title (truncated to 50 chars)
+   - Metadata (severity badge, days remaining, EPSS score)
+   - Product name
+   - Click-through to finding detail view
+
+**Design System Compliance:**
+- Follows Modern Dashboard UI color palette (violet accent #8B5CF6, soft dark #1c2128)
+- Glass morphism effects on filter panels and cards
+- Staggered animations on page load (200ms delays)
+- Chart.js 4.4.1 with consistent color scheme:
+  - Priority colors: P0 #DC2626, P1 #EA580C, P2 #D97706, P3 #2563EB, P4 #64748B
+  - Severity colors: Critical #DC2626, High #EA580C, Medium #D97706, Low #2563EB, Info #64748B
+- Typography: Plus Jakarta Sans (UI), JetBrains Mono (numeric values)
+- Responsive design: 1024px breakpoint for grid layouts
+
+**Navigation Integration:**
+- Sidebar link added to `base_modern.html` (line 247-253)
+- Command palette entries added (lines 376-377)
+- Active state detection via `{% if 'triage' in request.path %}`
+
+**API Integration:**
+- Uses existing `/api/v2/findings/bulk_triage/` endpoint for bulk actions
+- Query parameters for filtering: `priority_bucket`, `triage_state`, `severity`
+- Default sort: `-priority_score` (descending) then `-date`
+
+**Performance Characteristics:**
+- Triage Queue: Limits to 1000 findings, shows truncation warning if more exist
+- Dashboard: Aggregations use Django ORM with COUNT, TruncDate for efficiency
+- Chart data: Pre-computed in view, serialized to JSON
+- Action widgets: Top 10 results only to minimize DOM size
+
+**URL Registration** (`dojo/finding/urls.py` lines 7-8):
+```python
+re_path(r'^triage/queue$', views.triage_queue, name='triage_queue'),
+re_path(r'^triage/dashboard$', views.triage_dashboard, name='triage_dashboard'),
+```
+
 ### GitHub Data Models (January 2025)
 
 **Repository Model** (`dojo/models.py`)
@@ -877,6 +970,15 @@ Located in `dojo/frontend/`:
 - Session-based authentication (same as classic UI)
 - Classic UI remains default at `/dashboard`
 - Toggle between views via navigation link
+
+**Modern UI Implementations:**
+- `/dashboard_modern` - Main dashboard with stat cards and charts
+- `/findings/modern` - Findings list with DataTable component
+- `/engagement/modern` - Engagements list with DataTable component
+- `/product/modern` - Products list with DataTable component
+- `/github/insights/dashboard` - GitHub Insights analytics dashboard
+- `/triage/queue` - Priority-sorted vulnerability triage queue (Phase 3 - January 2025)
+- `/triage/dashboard` - Triage analytics dashboard with KPIs and charts (Phase 3 - January 2025)
 
 **Phase 1 Fixes (January 2025):**
 

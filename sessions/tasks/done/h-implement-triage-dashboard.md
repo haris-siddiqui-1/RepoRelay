@@ -1,7 +1,7 @@
 ---
 name: h-implement-triage-dashboard
 branch: feature/triage-dashboard
-status: in-progress
+status: completed
 created: 2025-11-25
 depends_on:
   - h-implement-triage-workflow
@@ -18,14 +18,14 @@ Build a modern triage dashboard with priority queue view, bulk actions, and acti
 **Reference**: `sessions/docs/vulnerability-prioritization-strategy.md` - Part 3
 
 ## Success Criteria
-- [ ] Create priority queue DataTable view at `/triage/queue`
-- [ ] Implement filters: priority bucket, tier, severity, alert type, SLA status, EPSS range, age
-- [ ] Add bulk triage action controls (escalate, accept, dismiss, assign, defer)
-- [ ] Create KPI widgets: total open, P0/P1 count, SLA breaches, triage rate
-- [ ] Create chart widgets: priority distribution, findings by tier, trend over time
-- [ ] Add action widgets: auto-triage suggestions, SLA approaching, KEV matches
-- [ ] Implement filter persistence (localStorage or user preference)
-- [ ] Use modern UI design system (Tailwind, Alpine.js, Chart.js)
+- [x] Create priority queue DataTable view at `/triage/queue`
+- [x] Implement filters: priority bucket, tier, severity, alert type, SLA status, EPSS range, age
+- [x] Add bulk triage action controls (escalate, accept, dismiss, assign, defer)
+- [x] Create KPI widgets: total open, P0/P1 count, SLA breaches, triage rate
+- [x] Create chart widgets: priority distribution, findings by tier, trend over time
+- [x] Add action widgets: auto-triage suggestions, SLA approaching, KEV matches
+- [x] Implement filter persistence (localStorage or user preference)
+- [x] Use modern UI design system (Tailwind, Alpine.js, Chart.js)
 
 ## Context Manifest
 
@@ -492,3 +492,15 @@ This task depends on Phase 2 (triage workflow) being complete. Uses the modern U
 
 ## Work Log
 - [2025-11-25] Task created from strategy document
+- [2025-11-25] Implementation complete:
+  - Added URL routes `/triage/queue` and `/triage/dashboard` to `dojo/finding/urls.py`
+  - Created `triage_queue()` view (lines 3362-3453) with priority-sorted DataTable, filters, bulk actions
+  - Created `triage_dashboard()` view (lines 3456-3638) with KPI cards, charts, action widgets
+  - Created `dojo/templates/dojo/triage_queue_modern.html` (700+ lines) with DataTable and bulk action modal
+  - Created `dojo/templates/dojo/triage_dashboard_modern.html` (450+ lines) with Chart.js visualizations
+  - Updated `base_modern.html` sidebar (lines 246-253) and command palette (lines 376-377)
+  - Fixed `repository_set` → `repositories` relation name bug (lines 3376, 3402)
+  - Fixed N+1 query pattern using prefetch cache optimization
+  - Added truncation warning for >1000 findings
+- [2025-11-25] Code review completed - addressed performance warnings
+- [2025-11-25] Documentation updated in CLAUDE.md

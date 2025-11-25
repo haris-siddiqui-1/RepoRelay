@@ -3392,10 +3392,15 @@ def triage_queue(request: HttpRequest) -> HttpResponse:
     findings_data = []
     today = timezone.now().date()
 
+    # Check if we're truncating results (for UI warning)
+    total_count = findings.count()
+    is_truncated = total_count > 1000
+
     for f in findings[:1000]:  # Limit to 1000 for performance
-        # Get repository info if available
-        repos = f.test.engagement.product.repositories.all()
-        repo = repos.first() if repos.exists() else None
+        # Get repository info from prefetched data (avoids N+1 queries)
+        # Convert to list to use prefetch cache, then get first element
+        repos = list(f.test.engagement.product.repositories.all())
+        repo = repos[0] if repos else None
 
         # Calculate SLA status
         sla_status = 'ok'
@@ -3437,6 +3442,8 @@ def triage_queue(request: HttpRequest) -> HttpResponse:
     return render(request, 'dojo/triage_queue_modern.html', {
         'findings_json': json.dumps(findings_data),
         'total_findings': len(findings_data),
+        'is_truncated': is_truncated,
+        'actual_total': total_count,
         'users': list(users),
         'current_filters': {
             'priority_bucket': priority_bucket,
