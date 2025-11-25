@@ -109,6 +109,27 @@ docker compose exec uwsgi bash -c "python manage.py generate_insights --category
 docker compose exec uwsgi bash -c "python manage.py generate_insights --all --days 30"
 ```
 
+### Priority Scoring Commands
+```bash
+# Calculate priority scores for all active findings (skips already scored)
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores"
+
+# Force recalculation of all findings
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --force"
+
+# Calculate for specific test's findings
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --test-id 123"
+
+# Calculate for specific product's findings
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --product-id 456"
+
+# Dry run to preview scoring results
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --dry-run"
+
+# Queue async Celery tasks instead of blocking
+docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --async"
+```
+
 ## Architecture Overview
 
 ### Monolithic Models with Domain Modules
@@ -133,7 +154,7 @@ Each feature module follows a consistent pattern:
 - API integration in `api_v2/`
 
 **Key Modules:**
-- `dojo/finding/` - Core vulnerability management with complex deduplication logic (dojo/finding/helper.py:712)
+- `dojo/finding/` - Core vulnerability management with complex deduplication logic (dojo/finding/helper.py:712) and priority scoring (dojo/finding/priority_scorer.py)
 - `dojo/importers/` - Scan file parsing framework (base_importer.py, default_importer.py, default_reimporter.py)
 - `dojo/tools/` - 211 security tool parsers (each with parser.py implementing get_fields, get_dedupe_fields, get_scan_types)
 - `dojo/authorization/` - RBAC with roles: Reader, API_Importer, Writer, Maintainer, Owner
@@ -328,6 +349,19 @@ GitHub alerts use a standardized unique_id_from_tool format:
 - Secret Scanning: `"github-secret_scanning-{repo_id}-{alert_id}"`
 - Re-imports automatically update existing findings based on this identifier
 - State changes (open→dismissed→fixed) sync bidirectionally between GitHub and DefectDojo
+
+### Priority Scoring System (January 2025)
+Automated vulnerability prioritization based on tier, severity, and risk modifiers:
+- Located in `dojo/finding/priority_scorer.py`
+- Three Finding fields: `priority_score` (integer), `priority_bucket` (P0-P4), `priority_calculated_at` (timestamp)
+- Formula: `PriorityScore = (TierWeight × SeverityScore) + Modifiers`
+- Tier weights: tier1 (5.0), tier2 (3.5), tier3 (2.0), tier4 (1.0), archived (0.2)
+- Severity scores: Critical (100), High (75), Medium (50), Low (25), Info (10)
+- Priority buckets: P0 (≥500), P1 (300-499), P2 (150-299), P3 (50-149), P4 (<50)
+- Positive modifiers: KEV (+150), Ransomware (+100), High EPSS (+75), SLA Breach (+50)
+- Negative modifiers: Very Low EPSS (-50), Dormant Repo (-40), No Production (-30)
+- Async calculation via Celery task `calculate_finding_priority_task()`
+- Batch processing via management command `python manage.py calculate_priority_scores`
 
 ### GitHub Data Models (January 2025)
 

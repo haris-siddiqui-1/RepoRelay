@@ -4,7 +4,7 @@ from time import strftime
 
 from django.conf import settings
 from django.db.models.query_utils import Q
-from django.db.models.signals import post_delete, pre_delete
+from django.db.models.signals import post_delete, post_save, pre_delete
 from django.db.utils import IntegrityError
 from django.dispatch.dispatcher import receiver
 from django.urls import reverse
@@ -94,6 +94,39 @@ pre_save_changed.connect(
         "risk_accepted",
     ],
 )
+
+
+# Post-save signal to trigger async priority calculation
+@receiver(post_save, sender=Finding, dispatch_uid="trigger_priority_calculation")
+def trigger_priority_calculation(sender, instance, created, update_fields=None, **kwargs):
+    """
+    Trigger async priority calculation after a finding is saved.
+
+    Priority scoring is calculated asynchronously via Celery to avoid
+    blocking the save operation. Only triggers for active, non-duplicate,
+    non-mitigated findings.
+    """
+    # Skip if this save was from priority calculation itself (prevent infinite loop)
+    if update_fields is not None and set(update_fields).issubset({
+        'priority_score', 'priority_bucket', 'priority_calculated_at'
+    }):
+        return
+
+    # Skip if finding is not in a state that should be scored
+    if not instance.active or instance.duplicate or instance.is_mitigated:
+        return
+
+    # Import here to avoid circular imports
+    from dojo.finding.priority_scorer import calculate_finding_priority_task
+
+    # Queue async task to calculate priority
+    # Using delay() queues the task without blocking
+    try:
+        calculate_finding_priority_task.delay(instance.id)
+        logger.debug("Queued priority calculation for finding %s", instance.id)
+    except Exception as e:
+        # Don't fail the save if priority calculation queuing fails
+        logger.warning("Failed to queue priority calculation for finding %s: %s", instance.id, e)
 
 
 def update_finding_status(new_state_finding, user, changed_fields=None):

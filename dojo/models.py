@@ -3554,6 +3554,29 @@ class Finding(models.Model):
                                           verbose_name=_("Auto-Triaged At"),
                                           help_text=_("Timestamp when auto-triage was performed"))
 
+    # Priority Scoring Fields - Phase 1 of Vulnerability Prioritization Strategy
+    PRIORITY_BUCKET_CHOICES = (
+        ('P0', _('Critical')),
+        ('P1', _('High')),
+        ('P2', _('Medium')),
+        ('P3', _('Low')),
+        ('P4', _('Minimal')),
+    )
+    priority_score = models.IntegerField(default=0,
+                                         db_index=True,
+                                         verbose_name=_("Priority Score"),
+                                         help_text=_("Computed priority score combining tier, severity, and modifiers (0-1000+)"))
+    priority_bucket = models.CharField(max_length=10,
+                                       choices=PRIORITY_BUCKET_CHOICES,
+                                       default='P3',
+                                       db_index=True,
+                                       verbose_name=_("Priority Bucket"),
+                                       help_text=_("Priority bucket based on score: P0 (>=500), P1 (300-499), P2 (150-299), P3 (50-149), P4 (<50)"))
+    priority_calculated_at = models.DateTimeField(null=True,
+                                                  blank=True,
+                                                  verbose_name=_("Priority Calculated At"),
+                                                  help_text=_("Timestamp when priority score was last calculated"))
+
     found_by = models.ManyToManyField(Test_Type,
                                       editable=False,
                                       verbose_name=_("Found by"),
