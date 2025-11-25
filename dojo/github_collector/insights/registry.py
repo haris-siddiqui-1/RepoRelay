@@ -57,6 +57,7 @@ def autodiscover():
         from dojo.github_collector.insights import security
         from dojo.github_collector.insights import ownership
         from dojo.github_collector.insights import technology
+        from dojo.github_collector.insights import consumption
     except ImportError:
         # Insight modules not yet created, that's okay
         pass

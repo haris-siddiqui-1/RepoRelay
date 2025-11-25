@@ -1877,6 +1877,42 @@ class Repository(models.Model):
                           verbose_name=_("Repository Tier"),
                           help_text=_("Computed criticality tier based on signals and activity"))
 
+    # Consumption Signals (Phase 4 - Vulnerability Prioritization)
+    dependent_repo_count = models.IntegerField(
+        default=0,
+        verbose_name=_("Dependent Repositories"),
+        help_text=_("Number of internal repositories that depend on this one")
+    )
+    downstream_consumers = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Downstream Consumers"),
+        help_text=_("List of repo names that declare this as a dependency")
+    )
+    is_shared_library = models.BooleanField(
+        default=False,
+        verbose_name=_("Is Shared Library"),
+        help_text=_("True if consumed by 5+ repositories")
+    )
+    consumption_tier_override = models.CharField(
+        max_length=10,
+        choices=TIER_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name=_("Consumption Tier Override"),
+        help_text=_("Tier override based on consumption (high consumption = higher tier)")
+    )
+    clone_count_14d = models.IntegerField(
+        default=0,
+        verbose_name=_("Clone Count (14d)"),
+        help_text=_("Repository clones in last 14 days (requires push access)")
+    )
+    view_count_14d = models.IntegerField(
+        default=0,
+        verbose_name=_("View Count (14d)"),
+        help_text=_("Repository page views in last 14 days (requires push access)")
+    )
+
     # Timestamps
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)

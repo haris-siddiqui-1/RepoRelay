@@ -73,6 +73,11 @@ class PriorityScorer:
     MODIFIER_DORMANT_REPO = -40     # > 180 days since last commit
     MODIFIER_NO_PROD_SIGNALS = -30  # No environments/releases
 
+    # Consumption signal modifiers (Phase 4)
+    MODIFIER_HIGH_CONSUMPTION = 50  # 50+ dependent repos (tier1 threshold)
+    MODIFIER_MED_CONSUMPTION = 30   # 20+ dependent repos (tier2 threshold)
+    MODIFIER_SHARED_LIBRARY = 20    # 5+ dependent repos (is_shared_library=True)
+
     def calculate(self, finding: "Finding", repository: Optional["Repository"] = None) -> int:
         """
         Calculate priority score for a finding.
@@ -141,7 +146,11 @@ class PriorityScorer:
         """
         Resolve tier weight from repository tier or product business_criticality.
 
-        Priority: Repository.tier > Product.business_criticality > Default (1.0)
+        Priority (highest to lowest):
+        1. Repository.consumption_tier_override (if populated from dependency graph)
+        2. Repository.tier (if populated from GitHub signals)
+        3. Product.business_criticality
+        4. Default (1.0)
 
         Args:
             finding: Finding instance
@@ -150,13 +159,23 @@ class PriorityScorer:
         Returns:
             Float tier weight multiplier
         """
-        # Priority 1: Use repository tier if provided
+        # Priority 1: Use consumption_tier_override if populated (Phase 4 - based on dependent repo count)
+        if repository and repository.consumption_tier_override:
+            weight = self.TIER_WEIGHTS.get(repository.consumption_tier_override, 1.0)
+            logger.debug(
+                "Using consumption_tier_override '%s' -> weight %.1f (dependent_repo_count=%d)",
+                repository.consumption_tier_override, weight,
+                getattr(repository, "dependent_repo_count", 0) or 0
+            )
+            return weight
+
+        # Priority 2: Use repository tier if provided
         if repository and repository.tier:
             weight = self.TIER_WEIGHTS.get(repository.tier, 1.0)
             logger.debug("Using repository tier '%s' -> weight %.1f", repository.tier, weight)
             return weight
 
-        # Priority 2: Fall back to product business_criticality
+        # Priority 3: Fall back to product business_criticality
         try:
             product = finding.test.engagement.product
             if product and product.business_criticality:
@@ -258,6 +277,28 @@ class PriorityScorer:
                 logger.debug(
                     "Finding %s: %d (dormant repo, %d days)",
                     finding.id, self.MODIFIER_DORMANT_REPO, days_since_commit
+                )
+
+            # Consumption signal modifiers (Phase 4)
+            # Apply one consumption modifier based on dependent_repo_count thresholds
+            dependent_count = getattr(repository, "dependent_repo_count", 0) or 0
+            if dependent_count >= 50:  # tier1 threshold
+                modifiers += self.MODIFIER_HIGH_CONSUMPTION
+                logger.debug(
+                    "Finding %s: +%d (high consumption, %d dependents)",
+                    finding.id, self.MODIFIER_HIGH_CONSUMPTION, dependent_count
+                )
+            elif dependent_count >= 20:  # tier2 threshold
+                modifiers += self.MODIFIER_MED_CONSUMPTION
+                logger.debug(
+                    "Finding %s: +%d (medium consumption, %d dependents)",
+                    finding.id, self.MODIFIER_MED_CONSUMPTION, dependent_count
+                )
+            elif getattr(repository, "is_shared_library", False):  # 5+ dependents
+                modifiers += self.MODIFIER_SHARED_LIBRARY
+                logger.debug(
+                    "Finding %s: +%d (shared library, %d dependents)",
+                    finding.id, self.MODIFIER_SHARED_LIBRARY, dependent_count
                 )
 
         return modifiers

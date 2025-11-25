@@ -30,6 +30,7 @@ while adding repository-level intelligence and centralized vulnerability managem
 
 from .alerts_collector import GitHubAlertsCollector
 from .collector import GitHubRepositoryCollector
+from .dependency_graph import DependencyGraphBuilder
 from .findings_converter import GitHubFindingsConverter
 from .signal_detector import SignalDetector
 from .tier_classifier import TierClassifier
@@ -38,6 +39,7 @@ __all__ = [
     'GitHubRepositoryCollector',
     'GitHubAlertsCollector',
     'GitHubFindingsConverter',
+    'DependencyGraphBuilder',
     'SignalDetector',
     'TierClassifier',
 ]
