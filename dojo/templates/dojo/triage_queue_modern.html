@@ -1,0 +1,1042 @@
+{% extends "base_modern.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Triage Queue" %} - DefectDojo{% endblock %}
+
+{% block add_styles %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'dojo/css/components/dataTable.css' %}">
+<style>
+    .triage-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .filter-panel {
+        background: rgba(28, 33, 40, 0.6);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        padding: 20px 24px;
+        margin-bottom: 24px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation-delay: 150ms;
+        opacity: 0;
+    }
+
+    @keyframes slideUp {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .filter-controls {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .filter-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #8b949e;
+    }
+
+    .filter-select {
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e6edf3;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 13px;
+        min-width: 140px;
+        cursor: pointer;
+        transition: border-color 200ms ease;
+    }
+
+    .filter-select:focus {
+        outline: none;
+        border-color: #8B5CF6;
+    }
+
+    .filter-select:hover {
+        border-color: rgba(139, 92, 246, 0.5);
+    }
+
+    /* Priority Badge */
+    .dd-priority-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+    }
+
+    .dd-priority-badge.p0 {
+        background: rgba(220, 38, 38, 0.2);
+        color: #DC2626;
+        border: 1px solid rgba(220, 38, 38, 0.3);
+    }
+
+    .dd-priority-badge.p1 {
+        background: rgba(234, 88, 12, 0.2);
+        color: #EA580C;
+        border: 1px solid rgba(234, 88, 12, 0.3);
+    }
+
+    .dd-priority-badge.p2 {
+        background: rgba(217, 119, 6, 0.2);
+        color: #D97706;
+        border: 1px solid rgba(217, 119, 6, 0.3);
+    }
+
+    .dd-priority-badge.p3 {
+        background: rgba(37, 99, 235, 0.2);
+        color: #2563EB;
+        border: 1px solid rgba(37, 99, 235, 0.3);
+    }
+
+    .dd-priority-badge.p4 {
+        background: rgba(100, 116, 139, 0.2);
+        color: #64748B;
+        border: 1px solid rgba(100, 116, 139, 0.3);
+    }
+
+    /* Tier Badge */
+    .dd-tier-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .dd-tier-badge.tier1 {
+        background: rgba(139, 92, 246, 0.2);
+        color: #A78BFA;
+    }
+
+    .dd-tier-badge.tier2 {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60A5FA;
+    }
+
+    .dd-tier-badge.tier3 {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ADE80;
+    }
+
+    .dd-tier-badge.tier4 {
+        background: rgba(100, 116, 139, 0.2);
+        color: #94A3B8;
+    }
+
+    /* SLA Badge */
+    .dd-sla-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .dd-sla-badge.breached {
+        background: rgba(220, 38, 38, 0.2);
+        color: #DC2626;
+    }
+
+    .dd-sla-badge.approaching {
+        background: rgba(217, 119, 6, 0.2);
+        color: #D97706;
+    }
+
+    .dd-sla-badge.ok {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ADE80;
+    }
+
+    /* KEV Icon */
+    .dd-kev-icon {
+        color: #DC2626;
+        font-weight: 700;
+    }
+
+    /* EPSS Bar */
+    .dd-epss-container {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .dd-epss-bar {
+        width: 40px;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .dd-epss-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 200ms ease;
+    }
+
+    .dd-epss-fill.high {
+        background: #DC2626;
+    }
+
+    .dd-epss-fill.medium {
+        background: #D97706;
+    }
+
+    .dd-epss-fill.low {
+        background: #4ADE80;
+    }
+
+    /* Triage Action Buttons */
+    .dd-triage-actions {
+        background: linear-gradient(180deg, rgba(28, 33, 40, 0.95) 0%, rgba(28, 33, 40, 0.98) 100%);
+        border-top: 1px solid rgba(139, 92, 246, 0.3);
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .dd-triage-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 200ms ease;
+        border: 1px solid transparent;
+    }
+
+    .dd-triage-btn.escalate {
+        background: rgba(234, 88, 12, 0.2);
+        color: #EA580C;
+        border-color: rgba(234, 88, 12, 0.3);
+    }
+
+    .dd-triage-btn.escalate:hover {
+        background: rgba(234, 88, 12, 0.3);
+    }
+
+    .dd-triage-btn.assign {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60A5FA;
+        border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    .dd-triage-btn.assign:hover {
+        background: rgba(59, 130, 246, 0.3);
+    }
+
+    .dd-triage-btn.defer {
+        background: rgba(139, 92, 246, 0.2);
+        color: #A78BFA;
+        border-color: rgba(139, 92, 246, 0.3);
+    }
+
+    .dd-triage-btn.defer:hover {
+        background: rgba(139, 92, 246, 0.3);
+    }
+
+    .dd-triage-btn.accept {
+        background: rgba(34, 197, 94, 0.2);
+        color: #4ADE80;
+        border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    .dd-triage-btn.accept:hover {
+        background: rgba(34, 197, 94, 0.3);
+    }
+
+    .dd-triage-btn.dismiss {
+        background: rgba(100, 116, 139, 0.2);
+        color: #94A3B8;
+        border-color: rgba(100, 116, 139, 0.3);
+    }
+
+    .dd-triage-btn.dismiss:hover {
+        background: rgba(100, 116, 139, 0.3);
+    }
+
+    /* Triage Modal */
+    .triage-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .triage-modal {
+        background: #1c2128;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 24px;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    }
+
+    .triage-modal h3 {
+        font-size: 18px;
+        font-weight: 600;
+        color: #F0F6FC;
+        margin-bottom: 16px;
+    }
+
+    .triage-modal-field {
+        margin-bottom: 16px;
+    }
+
+    .triage-modal-field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #8b949e;
+        margin-bottom: 6px;
+    }
+
+    .triage-modal-field input,
+    .triage-modal-field select,
+    .triage-modal-field textarea {
+        width: 100%;
+        background: #0f1419;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 10px 12px;
+        color: #e6edf3;
+        font-size: 14px;
+    }
+
+    .triage-modal-field textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .triage-modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 24px;
+    }
+
+    .triage-modal-btn {
+        padding: 10px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 200ms ease;
+    }
+
+    .triage-modal-btn.cancel {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #8b949e;
+    }
+
+    .triage-modal-btn.cancel:hover {
+        border-color: rgba(255, 255, 255, 0.3);
+        color: #e6edf3;
+    }
+
+    .triage-modal-btn.confirm {
+        background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+        border: none;
+        color: white;
+    }
+
+    .triage-modal-btn.confirm:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    /* Search box fix */
+    .dd-table-search {
+        position: relative !important;
+        flex: 1 !important;
+        max-width: 300px !important;
+    }
+
+    .dd-table-search input {
+        width: 100% !important;
+        padding: 8px 12px 8px 36px !important;
+        background: var(--dd-table-bg, #0f1419) !important;
+        border: 1px solid var(--dd-table-border, rgba(255, 255, 255, 0.1)) !important;
+        border-radius: 6px !important;
+        color: var(--dd-table-text, #e6edf3) !important;
+        font-size: 13px !important;
+    }
+
+    .dd-table-search input:focus {
+        outline: none !important;
+        border-color: var(--dd-table-accent, #8B5CF6) !important;
+    }
+
+    .dd-table-search-icon {
+        position: absolute !important;
+        left: 10px !important;
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        color: var(--dd-table-text-muted, #7d8590) !important;
+        pointer-events: none !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="triageQueue()" x-init="init()">
+    <!-- Page Header -->
+    <div class="mb-8 triage-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="font-sans text-5xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                    {% trans "Triage Queue" %}
+                </h1>
+                <p class="font-sans mt-2 text-base font-light text-enterprise-text-secondary tracking-wide">
+                    {% trans "Priority-sorted findings requiring triage action" %}
+                </p>
+            </div>
+            <a href="{% url 'triage_dashboard' %}"
+               class="inline-flex items-center px-5 py-2.5 bg-transparent border border-accent-500 text-accent-400 font-sans text-sm font-medium rounded-lg hover:bg-accent-500/10 transition-colors duration-200">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                {% trans "Dashboard" %}
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Panel -->
+    <div class="filter-panel">
+        <div class="filter-controls">
+            <div class="filter-group">
+                <span class="filter-label">{% trans "Triage State" %}</span>
+                <select class="filter-select" x-model="filters.triage_state" @change="applyFilters()">
+                    <option value="">{% trans "All States" %}</option>
+                    <option value="pending" selected>{% trans "Pending" %}</option>
+                    <option value="escalated">{% trans "Escalated" %}</option>
+                    <option value="assigned">{% trans "Assigned" %}</option>
+                    <option value="deferred">{% trans "Deferred" %}</option>
+                    <option value="accepted">{% trans "Accepted" %}</option>
+                    <option value="dismissed">{% trans "Dismissed" %}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">{% trans "Priority" %}</span>
+                <select class="filter-select" x-model="filters.priority_bucket" @change="applyFilters()">
+                    <option value="">{% trans "All Priorities" %}</option>
+                    <option value="P0">{% trans "P0 - Critical" %}</option>
+                    <option value="P1">{% trans "P1 - High" %}</option>
+                    <option value="P2">{% trans "P2 - Medium" %}</option>
+                    <option value="P3">{% trans "P3 - Low" %}</option>
+                    <option value="P4">{% trans "P4 - Minimal" %}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">{% trans "Severity" %}</span>
+                <select class="filter-select" x-model="filters.severity" @change="applyFilters()">
+                    <option value="">{% trans "All Severities" %}</option>
+                    <option value="Critical">{% trans "Critical" %}</option>
+                    <option value="High">{% trans "High" %}</option>
+                    <option value="Medium">{% trans "Medium" %}</option>
+                    <option value="Low">{% trans "Low" %}</option>
+                    <option value="Info">{% trans "Info" %}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">{% trans "SLA Status" %}</span>
+                <select class="filter-select" x-model="filters.sla_status" @change="applyFilters()">
+                    <option value="">{% trans "All" %}</option>
+                    <option value="breached">{% trans "Breached" %}</option>
+                    <option value="approaching">{% trans "Approaching" %}</option>
+                    <option value="ok">{% trans "OK" %}</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <span class="filter-label">{% trans "KEV Only" %}</span>
+                <select class="filter-select" x-model="filters.kev_only" @change="applyFilters()">
+                    <option value="">{% trans "All" %}</option>
+                    <option value="true">{% trans "KEV Only" %}</option>
+                </select>
+            </div>
+            <div class="ml-auto flex items-center gap-4">
+                <span class="text-sm text-enterprise-text-secondary">
+                    <span x-text="filteredData.length"></span> {% trans "findings" %}
+                </span>
+                <button class="text-sm text-accent-400 hover:text-accent-300" @click="resetFilters()">
+                    {% trans "Reset Filters" %}
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Findings Data -->
+    <script id="findings-data" type="application/json">
+    {{ findings_json|safe }}
+    </script>
+
+    <!-- Users Data for Assignment -->
+    <script id="users-data" type="application/json">
+    {{ users|safe }}
+    </script>
+
+    <!-- Data Table -->
+    <div class="enterprise-card rounded-lg p-6">
+        <div class="dd-table-enterprise">
+            <!-- Toolbar -->
+            <div class="mb-4 flex items-center justify-between">
+                <div class="dd-table-search">
+                    <svg class="dd-table-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path fill-rule="evenodd" d="M11.5 7a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0zm-.82 4.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 1 1-1.06 1.06l-3.04-3.04z"/>
+                    </svg>
+                    <input type="text" placeholder="{% trans 'Search findings...' %}" @input="search($event.target.value)">
+                </div>
+            </div>
+
+            <!-- Fixed Header Table -->
+            <table class="dd-table dd-table-header-fixed">
+                <thead class="dd-table-header">
+                    <tr>
+                        <th class="dd-table-checkbox" style="width: 40px;">
+                            <input type="checkbox"
+                                   :checked="selectAll"
+                                   @change="toggleSelectAll()"
+                                   aria-label="{% trans 'Select all' %}">
+                        </th>
+                        <th class="sortable" @click="sort('priority_score')" style="width: 80px;">
+                            {% trans "Priority" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'priority_score'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th class="sortable" @click="sort('title')" style="min-width: 200px;">
+                            {% trans "Finding" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'title'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th class="sortable" @click="sort('product_name')" style="width: 150px;">
+                            {% trans "Product" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'product_name'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th style="width: 70px;">{% trans "Tier" %}</th>
+                        <th class="sortable" @click="sort('severity')" style="width: 90px;">
+                            {% trans "Severity" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'severity'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th class="sortable" @click="sort('epss_score')" style="width: 100px;">
+                            {% trans "EPSS" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'epss_score'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th style="width: 50px;">{% trans "KEV" %}</th>
+                        <th class="sortable" @click="sort('age_days')" style="width: 70px;">
+                            {% trans "Age" %}
+                            <span class="dd-sort-icon" x-show="sortColumn === 'age_days'" x-text="sortDirection === 'asc' ? '↑' : '↓'"></span>
+                        </th>
+                        <th style="width: 100px;">{% trans "SLA" %}</th>
+                        <th style="width: 80px;">{% trans "Actions" %}</th>
+                    </tr>
+                </thead>
+            </table>
+
+            <!-- Scrollable Body -->
+            <div class="dd-table-scroll-container" style="height: 550px;" @scroll="handleScroll($event)" x-ref="tableContainer">
+                <div class="dd-table-virtual-spacer" :style="{ height: totalHeight + 'px' }">
+                    <div class="dd-table-virtual-content" :style="{ transform: 'translateY(' + offsetY + 'px)' }">
+                        <table class="dd-table dd-table-body-only">
+                            <tbody class="dd-table-body">
+                                <template x-for="(row, index) in visibleData" :key="row.id">
+                                    <tr class="dd-table-row"
+                                        :class="{
+                                            'selected': isSelected(row.id),
+                                            'even-row': (startIndex + index) % 2 === 1
+                                        }">
+                                        <!-- Checkbox -->
+                                        <td class="dd-table-cell dd-table-checkbox" style="width: 40px;" @click.stop>
+                                            <input type="checkbox"
+                                                   :checked="isSelected(row.id)"
+                                                   @change="toggleSelect(row.id)">
+                                        </td>
+
+                                        <!-- Priority -->
+                                        <td class="dd-table-cell" style="width: 80px;">
+                                            <span class="dd-priority-badge"
+                                                  :class="row.priority_bucket.toLowerCase()"
+                                                  x-text="row.priority_bucket + ' (' + row.priority_score + ')'"></span>
+                                        </td>
+
+                                        <!-- Title -->
+                                        <td class="dd-table-cell truncate" style="min-width: 200px; max-width: 300px;">
+                                            <a :href="row.finding_url" class="text-accent-400 hover:text-accent-300 hover:underline" x-text="row.title"></a>
+                                        </td>
+
+                                        <!-- Product -->
+                                        <td class="dd-table-cell truncate" style="width: 150px;" x-text="row.product_name"></td>
+
+                                        <!-- Tier -->
+                                        <td class="dd-table-cell" style="width: 70px;">
+                                            <span class="dd-tier-badge" :class="row.tier" x-text="row.tier.toUpperCase()"></span>
+                                        </td>
+
+                                        <!-- Severity -->
+                                        <td class="dd-table-cell" style="width: 90px;">
+                                            <span class="dd-severity-badge" :class="row.severity.toLowerCase()" x-text="row.severity"></span>
+                                        </td>
+
+                                        <!-- EPSS -->
+                                        <td class="dd-table-cell" style="width: 100px;">
+                                            <div class="dd-epss-container">
+                                                <div class="dd-epss-bar">
+                                                    <div class="dd-epss-fill"
+                                                         :class="{
+                                                             'high': row.epss_score >= 0.5,
+                                                             'medium': row.epss_score >= 0.1 && row.epss_score < 0.5,
+                                                             'low': row.epss_score < 0.1
+                                                         }"
+                                                         :style="{ width: (row.epss_score * 100) + '%' }"></div>
+                                                </div>
+                                                <span class="text-xs text-enterprise-text-secondary" x-text="(row.epss_score * 100).toFixed(1) + '%'"></span>
+                                            </div>
+                                        </td>
+
+                                        <!-- KEV -->
+                                        <td class="dd-table-cell text-center" style="width: 50px;">
+                                            <span x-show="row.known_exploited" class="dd-kev-icon" title="Known Exploited Vulnerability">
+                                                <svg class="w-4 h-4 inline" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                                </svg>
+                                            </span>
+                                        </td>
+
+                                        <!-- Age -->
+                                        <td class="dd-table-cell text-center" style="width: 70px;">
+                                            <span class="text-sm" x-text="row.age_days + 'd'"></span>
+                                        </td>
+
+                                        <!-- SLA -->
+                                        <td class="dd-table-cell" style="width: 100px;">
+                                            <span class="dd-sla-badge" :class="row.sla_status">
+                                                <template x-if="row.sla_status === 'breached'">
+                                                    <span>{% trans "Breached" %}</span>
+                                                </template>
+                                                <template x-if="row.sla_status === 'approaching'">
+                                                    <span x-text="row.sla_days_remaining + 'd'"></span>
+                                                </template>
+                                                <template x-if="row.sla_status === 'ok'">
+                                                    <span>{% trans "OK" %}</span>
+                                                </template>
+                                            </span>
+                                        </td>
+
+                                        <!-- Actions -->
+                                        <td class="dd-table-cell" style="width: 80px;">
+                                            <a :href="row.finding_url" class="text-accent-400 hover:text-accent-300 text-sm">
+                                                {% trans "View" %}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bulk Actions Bar -->
+            <div class="dd-bulk-actions dd-triage-actions" :class="{ 'visible': selected.length > 0 }">
+                <span class="dd-bulk-actions-count">
+                    <strong x-text="selected.length"></strong> {% trans "findings selected" %}
+                </span>
+                <button class="dd-triage-btn escalate" @click="openTriageModal('escalate')">
+                    {% trans "Escalate" %}
+                </button>
+                <button class="dd-triage-btn assign" @click="openTriageModal('assign')">
+                    {% trans "Assign" %}
+                </button>
+                <button class="dd-triage-btn defer" @click="openTriageModal('defer')">
+                    {% trans "Defer" %}
+                </button>
+                <button class="dd-triage-btn accept" @click="openTriageModal('accept')">
+                    {% trans "Accept Risk" %}
+                </button>
+                <button class="dd-triage-btn dismiss" @click="openTriageModal('dismiss')">
+                    {% trans "Dismiss" %}
+                </button>
+                <button class="dd-bulk-action-btn" @click="clearSelection()">
+                    {% trans "Cancel" %}
+                </button>
+            </div>
+
+            <!-- Pagination Info -->
+            <div class="dd-table-pagination">
+                <div class="dd-pagination-info">
+                    {% trans "Showing" %} <span x-text="startIndex + 1"></span>-<span x-text="Math.min(endIndex, filteredData.length)"></span>
+                    {% trans "of" %} <span x-text="filteredData.length"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Triage Modal -->
+    <div class="triage-modal-overlay" x-show="showModal" x-cloak @click.self="closeModal()">
+        <div class="triage-modal" @click.stop>
+            <h3 x-text="modalTitle"></h3>
+
+            <!-- Reason Field (for accept/dismiss) -->
+            <div class="triage-modal-field" x-show="modalAction === 'accept' || modalAction === 'dismiss'">
+                <label>{% trans "Reason" %} <span class="text-red-400">*</span></label>
+                <textarea x-model="triageReason" placeholder="{% trans 'Enter reason for this action...' %}"></textarea>
+            </div>
+
+            <!-- Assignee Field (for assign) -->
+            <div class="triage-modal-field" x-show="modalAction === 'assign'">
+                <label>{% trans "Assign To" %} <span class="text-red-400">*</span></label>
+                <select x-model="assigneeId">
+                    <option value="">{% trans "Select user..." %}</option>
+                    <template x-for="user in users" :key="user.id">
+                        <option :value="user.id" x-text="user.username"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- Due Date Field (for defer) -->
+            <div class="triage-modal-field" x-show="modalAction === 'defer'">
+                <label>{% trans "Defer Until" %}</label>
+                <input type="date" x-model="deferDate">
+            </div>
+
+            <!-- Note Field (optional for all) -->
+            <div class="triage-modal-field" x-show="modalAction !== 'accept' && modalAction !== 'dismiss'">
+                <label>{% trans "Note" %} ({% trans "optional" %})</label>
+                <textarea x-model="triageReason" placeholder="{% trans 'Add a note...' %}"></textarea>
+            </div>
+
+            <div class="triage-modal-actions">
+                <button class="triage-modal-btn cancel" @click="closeModal()">{% trans "Cancel" %}</button>
+                <button class="triage-modal-btn confirm" @click="submitTriage()" :disabled="isSubmitting">
+                    <span x-show="!isSubmitting" x-text="'Confirm ' + modalAction"></span>
+                    <span x-show="isSubmitting">{% trans "Processing..." %}</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('triageQueue', () => ({
+        // Data
+        allData: [],
+        filteredData: [],
+        visibleData: [],
+        users: [],
+
+        // Selection
+        selected: [],
+        selectAll: false,
+
+        // Sorting
+        sortColumn: 'priority_score',
+        sortDirection: 'desc',
+
+        // Virtual scrolling
+        rowHeight: 48,
+        visibleRows: 12,
+        startIndex: 0,
+        endIndex: 12,
+        offsetY: 0,
+        totalHeight: 0,
+
+        // Filters
+        filters: {
+            triage_state: 'pending',
+            priority_bucket: '',
+            severity: '',
+            sla_status: '',
+            kev_only: ''
+        },
+        searchQuery: '',
+
+        // Modal state
+        showModal: false,
+        modalAction: '',
+        modalTitle: '',
+        triageReason: '',
+        assigneeId: '',
+        deferDate: '',
+        isSubmitting: false,
+
+        // CSRF
+        csrfToken: '{{ csrf_token }}',
+
+        init() {
+            // Load data
+            this.allData = JSON.parse(document.getElementById('findings-data').textContent);
+            this.users = JSON.parse(document.getElementById('users-data').textContent);
+
+            // Apply initial filters
+            this.applyFilters();
+
+            // Calculate virtual scroll height
+            this.calculateScrollHeight();
+        },
+
+        applyFilters() {
+            let data = [...this.allData];
+
+            // Apply filters
+            if (this.filters.triage_state) {
+                data = data.filter(row => row.triage_state === this.filters.triage_state);
+            }
+            if (this.filters.priority_bucket) {
+                data = data.filter(row => row.priority_bucket === this.filters.priority_bucket);
+            }
+            if (this.filters.severity) {
+                data = data.filter(row => row.severity === this.filters.severity);
+            }
+            if (this.filters.sla_status) {
+                data = data.filter(row => row.sla_status === this.filters.sla_status);
+            }
+            if (this.filters.kev_only === 'true') {
+                data = data.filter(row => row.known_exploited === true);
+            }
+
+            // Apply search
+            if (this.searchQuery) {
+                const query = this.searchQuery.toLowerCase();
+                data = data.filter(row =>
+                    row.title.toLowerCase().includes(query) ||
+                    row.product_name.toLowerCase().includes(query) ||
+                    row.repository_name.toLowerCase().includes(query)
+                );
+            }
+
+            this.filteredData = data;
+            this.sortData();
+            this.calculateScrollHeight();
+            this.updateVisibleData();
+        },
+
+        resetFilters() {
+            this.filters = {
+                triage_state: '',
+                priority_bucket: '',
+                severity: '',
+                sla_status: '',
+                kev_only: ''
+            };
+            this.applyFilters();
+        },
+
+        search(query) {
+            this.searchQuery = query;
+            this.applyFilters();
+        },
+
+        sort(column) {
+            if (this.sortColumn === column) {
+                this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortColumn = column;
+                this.sortDirection = 'desc';
+            }
+            this.sortData();
+            this.updateVisibleData();
+        },
+
+        sortData() {
+            const col = this.sortColumn;
+            const dir = this.sortDirection === 'asc' ? 1 : -1;
+
+            this.filteredData.sort((a, b) => {
+                let aVal = a[col];
+                let bVal = b[col];
+
+                // Handle severity sorting
+                if (col === 'severity') {
+                    const order = { 'Critical': 5, 'High': 4, 'Medium': 3, 'Low': 2, 'Info': 1 };
+                    aVal = order[aVal] || 0;
+                    bVal = order[bVal] || 0;
+                }
+
+                if (aVal < bVal) return -1 * dir;
+                if (aVal > bVal) return 1 * dir;
+                return 0;
+            });
+        },
+
+        // Virtual scrolling
+        calculateScrollHeight() {
+            this.totalHeight = this.filteredData.length * this.rowHeight;
+        },
+
+        handleScroll(event) {
+            const scrollTop = event.target.scrollTop;
+            this.startIndex = Math.floor(scrollTop / this.rowHeight);
+            this.offsetY = this.startIndex * this.rowHeight;
+            this.updateVisibleData();
+        },
+
+        updateVisibleData() {
+            this.endIndex = Math.min(this.startIndex + this.visibleRows + 2, this.filteredData.length);
+            this.visibleData = this.filteredData.slice(this.startIndex, this.endIndex);
+        },
+
+        // Selection
+        toggleSelect(id) {
+            const index = this.selected.indexOf(id);
+            if (index > -1) {
+                this.selected.splice(index, 1);
+            } else {
+                this.selected.push(id);
+            }
+            this.selectAll = this.selected.length === this.filteredData.length;
+        },
+
+        toggleSelectAll() {
+            if (this.selectAll) {
+                this.selected = [];
+            } else {
+                this.selected = this.filteredData.map(row => row.id);
+            }
+            this.selectAll = !this.selectAll;
+        },
+
+        isSelected(id) {
+            return this.selected.includes(id);
+        },
+
+        clearSelection() {
+            this.selected = [];
+            this.selectAll = false;
+        },
+
+        // Triage Modal
+        openTriageModal(action) {
+            this.modalAction = action;
+            this.modalTitle = this.getModalTitle(action);
+            this.triageReason = '';
+            this.assigneeId = '';
+            this.deferDate = '';
+            this.showModal = true;
+        },
+
+        getModalTitle(action) {
+            const titles = {
+                'escalate': '{% trans "Escalate Findings" %}',
+                'assign': '{% trans "Assign Findings" %}',
+                'defer': '{% trans "Defer Findings" %}',
+                'accept': '{% trans "Accept Risk" %}',
+                'dismiss': '{% trans "Dismiss Findings" %}'
+            };
+            return titles[action] || action;
+        },
+
+        closeModal() {
+            this.showModal = false;
+            this.modalAction = '';
+            this.triageReason = '';
+            this.assigneeId = '';
+            this.deferDate = '';
+        },
+
+        async submitTriage() {
+            // Validation
+            if ((this.modalAction === 'accept' || this.modalAction === 'dismiss') && !this.triageReason) {
+                alert('{% trans "Reason is required for this action" %}');
+                return;
+            }
+            if (this.modalAction === 'assign' && !this.assigneeId) {
+                alert('{% trans "Please select a user to assign" %}');
+                return;
+            }
+
+            this.isSubmitting = true;
+
+            try {
+                const payload = {
+                    finding_ids: this.selected,
+                    action: this.modalAction,
+                    reason: this.triageReason || null,
+                    assigned_to: this.assigneeId ? parseInt(this.assigneeId) : null,
+                    due_date: this.deferDate || null
+                };
+
+                const response = await fetch('/api/v2/findings/bulk_triage/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.csrfToken
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Show success message
+                    const msg = `{% trans "Successfully triaged" %} ${result.success_count} {% trans "findings" %}`;
+                    alert(msg);
+
+                    // Remove triaged findings from view
+                    const triaged = new Set(this.selected);
+                    this.allData = this.allData.filter(row => !triaged.has(row.id));
+                    this.clearSelection();
+                    this.applyFilters();
+                    this.closeModal();
+                } else {
+                    alert('{% trans "Error:" %} ' + JSON.stringify(result));
+                }
+            } catch (error) {
+                console.error('Triage error:', error);
+                alert('{% trans "An error occurred. Please try again." %}');
+            } finally {
+                this.isSubmitting = false;
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}

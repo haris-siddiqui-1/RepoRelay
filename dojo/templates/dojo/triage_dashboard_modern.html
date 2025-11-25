@@ -1,0 +1,722 @@
+{% extends "base_modern.html" %}
+{% load i18n %}
+{% load static %}
+
+{% block title %}{% trans "Triage Dashboard" %} - DefectDojo{% endblock %}
+
+{% block add_styles %}
+{{ block.super }}
+<style>
+    .dashboard-header {
+        animation: headerReveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    @keyframes headerReveal {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* KPI Cards */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+        margin-bottom: 32px;
+    }
+
+    @media (max-width: 1024px) {
+        .kpi-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    .kpi-card {
+        background: rgba(28, 33, 40, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        padding: 24px;
+        position: relative;
+        overflow: hidden;
+        animation: kpiAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    .kpi-card:nth-child(1) { animation-delay: 200ms; }
+    .kpi-card:nth-child(2) { animation-delay: 250ms; }
+    .kpi-card:nth-child(3) { animation-delay: 300ms; }
+    .kpi-card:nth-child(4) { animation-delay: 350ms; }
+
+    @keyframes kpiAppear {
+        0% {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--kpi-color), transparent);
+    }
+
+    .kpi-card.critical { --kpi-color: #DC2626; }
+    .kpi-card.warning { --kpi-color: #D97706; }
+    .kpi-card.info { --kpi-color: #2563EB; }
+    .kpi-card.success { --kpi-color: #22C55E; }
+
+    .kpi-label {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #8b949e;
+        margin-bottom: 8px;
+    }
+
+    .kpi-value {
+        font-size: 42px;
+        font-weight: 700;
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1;
+    }
+
+    .kpi-card.critical .kpi-value { color: #DC2626; }
+    .kpi-card.warning .kpi-value { color: #D97706; }
+    .kpi-card.info .kpi-value { color: #2563EB; }
+    .kpi-card.success .kpi-value { color: #22C55E; }
+
+    .kpi-sublabel {
+        font-size: 12px;
+        color: #6e7681;
+        margin-top: 8px;
+    }
+
+    /* Widget Grid */
+    .widget-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 24px;
+    }
+
+    .widget {
+        background: rgba(28, 33, 40, 0.8);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 16px;
+        overflow: hidden;
+        animation: widgetAppear 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        opacity: 0;
+    }
+
+    .widget.span-6 { grid-column: span 6; }
+    .widget.span-4 { grid-column: span 4; }
+    .widget.span-12 { grid-column: span 12; }
+
+    @media (max-width: 1024px) {
+        .widget.span-6, .widget.span-4 {
+            grid-column: span 12;
+        }
+    }
+
+    .widget:nth-child(1) { animation-delay: 400ms; }
+    .widget:nth-child(2) { animation-delay: 450ms; }
+    .widget:nth-child(3) { animation-delay: 500ms; }
+    .widget:nth-child(4) { animation-delay: 550ms; }
+    .widget:nth-child(5) { animation-delay: 600ms; }
+    .widget:nth-child(6) { animation-delay: 650ms; }
+    .widget:nth-child(7) { animation-delay: 700ms; }
+
+    @keyframes widgetAppear {
+        0% {
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+        }
+        100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+
+    .widget-header {
+        padding: 16px 20px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(124, 58, 237, 0.02) 100%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .widget-title {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #8B5CF6;
+    }
+
+    .widget-body {
+        padding: 20px;
+    }
+
+    .widget-chart {
+        height: 280px;
+        position: relative;
+    }
+
+    /* Action Items List */
+    .action-list {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .action-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        transition: background 200ms ease;
+    }
+
+    .action-item:last-child {
+        border-bottom: none;
+    }
+
+    .action-item:hover {
+        background: rgba(139, 92, 246, 0.05);
+        margin: 0 -20px;
+        padding: 12px 20px;
+    }
+
+    .action-item-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .action-item-icon.critical {
+        background: rgba(220, 38, 38, 0.2);
+        color: #DC2626;
+    }
+
+    .action-item-icon.warning {
+        background: rgba(217, 119, 6, 0.2);
+        color: #D97706;
+    }
+
+    .action-item-icon.info {
+        background: rgba(37, 99, 235, 0.2);
+        color: #3B82F6;
+    }
+
+    .action-item-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .action-item-title {
+        font-size: 13px;
+        font-weight: 500;
+        color: #F0F6FC;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .action-item-meta {
+        font-size: 11px;
+        color: #8b949e;
+        margin-top: 2px;
+    }
+
+    .action-item-badge {
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+
+    .action-item-badge.days {
+        background: rgba(217, 119, 6, 0.2);
+        color: #D97706;
+    }
+
+    .action-item-badge.severity {
+        background: rgba(220, 38, 38, 0.2);
+        color: #DC2626;
+    }
+
+    .action-item-badge.epss {
+        background: rgba(139, 92, 246, 0.2);
+        color: #A78BFA;
+    }
+
+    /* Severity Badge */
+    .severity-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .severity-badge.critical {
+        background: rgba(220, 38, 38, 0.2);
+        color: #DC2626;
+    }
+
+    .severity-badge.high {
+        background: rgba(234, 88, 12, 0.2);
+        color: #EA580C;
+    }
+
+    .severity-badge.medium {
+        background: rgba(217, 119, 6, 0.2);
+        color: #D97706;
+    }
+
+    .severity-badge.low {
+        background: rgba(37, 99, 235, 0.2);
+        color: #3B82F6;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 32px 20px;
+        color: #6e7681;
+    }
+
+    .empty-state-icon {
+        width: 48px;
+        height: 48px;
+        margin: 0 auto 12px;
+        opacity: 0.5;
+    }
+
+    .empty-state-text {
+        font-size: 13px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="triageDashboard()" x-init="init()">
+    <!-- Page Header -->
+    <div class="mb-8 dashboard-header">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="font-sans text-5xl font-bold leading-tight text-enterprise-text-primary tracking-tight">
+                    {% trans "Triage Dashboard" %}
+                </h1>
+                <p class="font-sans mt-2 text-base font-light text-enterprise-text-secondary tracking-wide">
+                    {% trans "Overview of vulnerability triage workload" %}
+                </p>
+            </div>
+            <a href="{% url 'triage_queue' %}"
+               class="inline-flex items-center px-5 py-2.5 bg-accent-500 text-white font-sans text-sm font-medium rounded-lg hover:bg-accent-600 transition-colors duration-200">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+                </svg>
+                {% trans "Triage Queue" %}
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+        <div class="kpi-card info">
+            <div class="kpi-label">{% trans "Total Pending" %}</div>
+            <div class="kpi-value">{{ total_open }}</div>
+            <div class="kpi-sublabel">{% trans "Findings awaiting triage" %}</div>
+        </div>
+        <div class="kpi-card critical">
+            <div class="kpi-label">{% trans "P0/P1 Findings" %}</div>
+            <div class="kpi-value">{{ p0_p1_count }}</div>
+            <div class="kpi-sublabel">{% trans "High priority items" %}</div>
+        </div>
+        <div class="kpi-card warning">
+            <div class="kpi-label">{% trans "SLA Breaches" %}</div>
+            <div class="kpi-value">{{ sla_breaches }}</div>
+            <div class="kpi-sublabel">{% trans "Past due findings" %}</div>
+        </div>
+        <div class="kpi-card success">
+            <div class="kpi-label">{% trans "Triage Rate" %}</div>
+            <div class="kpi-value">{{ triage_rate }}</div>
+            <div class="kpi-sublabel">{% trans "Findings/day (7-day avg)" %}</div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="widget-grid mb-8">
+        <!-- Priority Distribution -->
+        <div class="widget span-6">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "Priority Distribution" %}</span>
+            </div>
+            <div class="widget-body">
+                <div class="widget-chart">
+                    <canvas id="priorityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Severity Distribution -->
+        <div class="widget span-6">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "Severity Distribution" %}</span>
+            </div>
+            <div class="widget-body">
+                <div class="widget-chart">
+                    <canvas id="severityChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trend Over Time -->
+        <div class="widget span-12">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "New Findings Trend (30 Days)" %}</span>
+            </div>
+            <div class="widget-body">
+                <div class="widget-chart">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Widgets Row -->
+    <div class="widget-grid">
+        <!-- SLA Approaching -->
+        <div class="widget span-4">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "SLA Approaching" %}</span>
+                <span class="text-xs text-enterprise-text-secondary">{% trans "Next 7 days" %}</span>
+            </div>
+            <div class="widget-body">
+                {% if sla_approaching %}
+                <div class="action-list">
+                    {% for item in sla_approaching %}
+                    <a href="{{ item.url }}" class="action-item">
+                        <div class="action-item-icon warning">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="action-item-content">
+                            <div class="action-item-title">{{ item.title }}</div>
+                            <div class="action-item-meta">{{ item.product }} &middot; <span class="severity-badge {{ item.severity|lower }}">{{ item.severity }}</span></div>
+                        </div>
+                        <div class="action-item-badge days">{{ item.days_remaining }}d</div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="empty-state-text">{% trans "No approaching SLA deadlines" %}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- KEV Matches -->
+        <div class="widget span-4">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "KEV Matches" %}</span>
+                <span class="text-xs text-enterprise-text-secondary">{% trans "Known Exploited" %}</span>
+            </div>
+            <div class="widget-body">
+                {% if kev_matches %}
+                <div class="action-list">
+                    {% for item in kev_matches %}
+                    <a href="{{ item.url }}" class="action-item">
+                        <div class="action-item-icon critical">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="action-item-content">
+                            <div class="action-item-title">{{ item.title }}</div>
+                            <div class="action-item-meta">{{ item.product }} &middot; <span class="severity-badge {{ item.severity|lower }}">{{ item.severity }}</span></div>
+                        </div>
+                        <div class="action-item-badge severity">P{{ item.priority_score }}</div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="empty-state-text">{% trans "No KEV matches pending" %}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- High EPSS -->
+        <div class="widget span-4">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "High EPSS Score" %}</span>
+                <span class="text-xs text-enterprise-text-secondary">{% trans "≥50% probability" %}</span>
+            </div>
+            <div class="widget-body">
+                {% if high_epss %}
+                <div class="action-list">
+                    {% for item in high_epss %}
+                    <a href="{{ item.url }}" class="action-item">
+                        <div class="action-item-icon info">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="action-item-content">
+                            <div class="action-item-title">{{ item.title }}</div>
+                            <div class="action-item-meta">{{ item.product }} &middot; <span class="severity-badge {{ item.severity|lower }}">{{ item.severity }}</span></div>
+                        </div>
+                        <div class="action-item-badge epss">{{ item.epss_score|floatformat:1 }}%</div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="empty-state-text">{% trans "No high EPSS findings" %}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Stale Findings -->
+        <div class="widget span-12">
+            <div class="widget-header">
+                <span class="widget-title">{% trans "Stale Findings" %}</span>
+                <span class="text-xs text-enterprise-text-secondary">{% trans "Pending >30 days" %}</span>
+            </div>
+            <div class="widget-body">
+                {% if stale_findings %}
+                <div class="action-list" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 24px;">
+                    {% for item in stale_findings %}
+                    <a href="{{ item.url }}" class="action-item">
+                        <div class="action-item-icon warning">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="action-item-content">
+                            <div class="action-item-title">{{ item.title }}</div>
+                            <div class="action-item-meta">{{ item.product }} &middot; <span class="severity-badge {{ item.severity|lower }}">{{ item.severity }}</span></div>
+                        </div>
+                        <div class="action-item-badge days">{{ item.age_days }}d old</div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="empty-state-text">{% trans "No stale findings" %}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart Data -->
+<script id="priority-data" type="application/json">
+{{ priority_data_json|safe }}
+</script>
+<script id="severity-data" type="application/json">
+{{ severity_data_json|safe }}
+</script>
+<script id="trend-labels" type="application/json">
+{{ trend_labels_json|safe }}
+</script>
+<script id="trend-values" type="application/json">
+{{ trend_values_json|safe }}
+</script>
+{% endblock %}
+
+{% block postscript %}
+{{ block.super }}
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('triageDashboard', () => ({
+        init() {
+            this.initCharts();
+        },
+
+        initCharts() {
+            const priorityData = JSON.parse(document.getElementById('priority-data').textContent);
+            const severityData = JSON.parse(document.getElementById('severity-data').textContent);
+            const trendLabels = JSON.parse(document.getElementById('trend-labels').textContent);
+            const trendValues = JSON.parse(document.getElementById('trend-values').textContent);
+
+            // Chart.js default styling for dark mode
+            Chart.defaults.color = '#8b949e';
+            Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+            // Priority Distribution Pie Chart
+            new Chart(document.getElementById('priorityChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: priorityData.labels,
+                    datasets: [{
+                        data: priorityData.values,
+                        backgroundColor: priorityData.colors,
+                        borderWidth: 0,
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '60%',
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                padding: 16,
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                font: { size: 11 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Severity Distribution Bar Chart
+            new Chart(document.getElementById('severityChart'), {
+                type: 'bar',
+                data: {
+                    labels: severityData.labels,
+                    datasets: [{
+                        data: severityData.values,
+                        backgroundColor: severityData.colors,
+                        borderRadius: 6,
+                        barThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: { font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+
+            // Trend Line Chart
+            new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: trendLabels,
+                    datasets: [{
+                        label: '{% trans "New Findings" %}',
+                        data: trendValues,
+                        borderColor: '#8B5CF6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        pointHoverBackgroundColor: '#8B5CF6',
+                        pointHoverBorderColor: '#fff',
+                        pointHoverBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1c2128',
+                            titleColor: '#F0F6FC',
+                            bodyColor: '#8b949e',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                font: { size: 10 },
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                font: { size: 11 },
+                                precision: 0
+                            },
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    }));
+});
+</script>
+{% endblock %}

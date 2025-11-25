@@ -3353,3 +3353,279 @@ def calculate_possible_related_actions_for_similar_finding(
         ))
 
     return actions
+
+
+# =============================================================================
+# Triage Views (Modern UI)
+# =============================================================================
+
+def triage_queue(request: HttpRequest) -> HttpResponse:
+    """
+    Modern triage queue view with priority-sorted findings.
+
+    Displays findings pending triage in a DataTable sorted by priority score,
+    with bulk action controls for triage operations.
+    """
+    findings = get_authorized_findings(Permissions.Finding_View).filter(
+        active=True,
+        duplicate=False,
+    ).select_related(
+        'test__engagement__product',
+        'triage_assigned_to',
+    ).prefetch_related(
+        'test__engagement__product__repositories',
+    ).order_by('-priority_score', '-date')
+
+    # Optional filters from request
+    priority_bucket = request.GET.get('priority_bucket')
+    triage_state = request.GET.get('triage_state', 'pending')  # Default to pending
+    severity = request.GET.get('severity')
+
+    if priority_bucket:
+        findings = findings.filter(priority_bucket=priority_bucket)
+    if triage_state:
+        findings = findings.filter(triage_state=triage_state)
+    if severity:
+        findings = findings.filter(severity=severity)
+
+    # Serialize findings for DataTable
+    findings_data = []
+    today = timezone.now().date()
+
+    for f in findings[:1000]:  # Limit to 1000 for performance
+        # Get repository info if available
+        repos = f.test.engagement.product.repositories.all()
+        repo = repos.first() if repos.exists() else None
+
+        # Calculate SLA status
+        sla_status = 'ok'
+        sla_days_remaining = None
+        if f.sla_expiration_date:
+            days_remaining = (f.sla_expiration_date - today).days
+            sla_days_remaining = days_remaining
+            if days_remaining < 0:
+                sla_status = 'breached'
+            elif days_remaining <= 7:
+                sla_status = 'approaching'
+
+        findings_data.append({
+            'id': f.id,
+            'priority_score': f.priority_score or 0,
+            'priority_bucket': f.priority_bucket or 'P4',
+            'title': f.title,
+            'repository_name': repo.name if repo else 'N/A',
+            'repository_id': repo.id if repo else None,
+            'tier': repo.tier if repo else 'tier4',
+            'severity': f.severity,
+            'epss_score': round(f.epss_score, 4) if f.epss_score else 0.0,
+            'known_exploited': f.known_exploited,
+            'age_days': (today - f.date).days if f.date else 0,
+            'sla_status': sla_status,
+            'sla_days_remaining': sla_days_remaining,
+            'triage_state': f.triage_state or 'pending',
+            'triage_assigned_to': f.triage_assigned_to.username if f.triage_assigned_to else None,
+            'product_name': f.test.engagement.product.name,
+            'product_id': f.test.engagement.product.id,
+            'finding_url': reverse('view_finding', args=[f.id]),
+        })
+
+    # Get users for assignment dropdown
+    from dojo.models import Dojo_User
+    users = Dojo_User.objects.filter(is_active=True).order_by('username').values('id', 'username')
+
+    add_breadcrumb(title="Triage Queue", top_level=True, request=request)
+    return render(request, 'dojo/triage_queue_modern.html', {
+        'findings_json': json.dumps(findings_data),
+        'total_findings': len(findings_data),
+        'users': list(users),
+        'current_filters': {
+            'priority_bucket': priority_bucket,
+            'triage_state': triage_state,
+            'severity': severity,
+        },
+    })
+
+
+def triage_dashboard(request: HttpRequest) -> HttpResponse:
+    """
+    Modern triage dashboard with KPI widgets, charts, and action items.
+
+    Provides overview of triage workload with:
+    - KPI cards: Total Open, P0/P1 Count, SLA Breaches, Triage Rate
+    - Charts: Priority Distribution, Findings by Tier, Trend over Time
+    - Action widgets: Auto-Triage Suggestions, SLA Approaching, KEV Matches
+    """
+    from django.db.models import Count, Q
+    from django.db.models.functions import TruncDate
+    from datetime import timedelta
+
+    findings = get_authorized_findings(Permissions.Finding_View).filter(
+        active=True,
+        duplicate=False,
+    )
+
+    today = timezone.now().date()
+    thirty_days_ago = today - timedelta(days=30)
+    seven_days_ago = today - timedelta(days=7)
+
+    # KPI Calculations
+    total_open = findings.filter(triage_state='pending').count()
+
+    p0_p1_count = findings.filter(
+        triage_state='pending',
+        priority_bucket__in=['P0', 'P1']
+    ).count()
+
+    sla_breaches = findings.filter(
+        triage_state='pending',
+        sla_expiration_date__lt=today
+    ).count()
+
+    # Triage rate: findings triaged in last 7 days / 7
+    triaged_last_week = findings.exclude(
+        triage_state='pending'
+    ).filter(
+        date__gte=seven_days_ago
+    ).count()
+    triage_rate = round(triaged_last_week / 7, 1)
+
+    # Priority Distribution (for pie chart)
+    priority_distribution = findings.filter(
+        triage_state='pending'
+    ).values('priority_bucket').annotate(
+        count=Count('id')
+    ).order_by('priority_bucket')
+
+    priority_data = {
+        'labels': ['P0 - Critical', 'P1 - High', 'P2 - Medium', 'P3 - Low', 'P4 - Minimal'],
+        'values': [0, 0, 0, 0, 0],
+        'colors': ['#DC2626', '#EA580C', '#D97706', '#2563EB', '#64748B'],
+    }
+    bucket_index = {'P0': 0, 'P1': 1, 'P2': 2, 'P3': 3, 'P4': 4}
+    for item in priority_distribution:
+        bucket = item['priority_bucket'] or 'P4'
+        if bucket in bucket_index:
+            priority_data['values'][bucket_index[bucket]] = item['count']
+
+    # Findings by Severity (for bar chart)
+    severity_distribution = findings.filter(
+        triage_state='pending'
+    ).values('severity').annotate(
+        count=Count('id')
+    ).order_by('severity')
+
+    severity_data = {
+        'labels': ['Critical', 'High', 'Medium', 'Low', 'Info'],
+        'values': [0, 0, 0, 0, 0],
+        'colors': ['#DC2626', '#EA580C', '#D97706', '#2563EB', '#64748B'],
+    }
+    severity_index = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, 'Info': 4}
+    for item in severity_distribution:
+        sev = item['severity']
+        if sev in severity_index:
+            severity_data['values'][severity_index[sev]] = item['count']
+
+    # Trend over time (last 30 days - for line chart)
+    trend_data = findings.filter(
+        date__gte=thirty_days_ago
+    ).annotate(
+        day=TruncDate('date')
+    ).values('day').annotate(
+        count=Count('id')
+    ).order_by('day')
+
+    trend_labels = []
+    trend_values = []
+    for item in trend_data:
+        trend_labels.append(item['day'].strftime('%Y-%m-%d'))
+        trend_values.append(item['count'])
+
+    # Action Widgets Data
+
+    # SLA Approaching (within 7 days)
+    sla_approaching = findings.filter(
+        triage_state='pending',
+        sla_expiration_date__gte=today,
+        sla_expiration_date__lte=today + timedelta(days=7)
+    ).select_related(
+        'test__engagement__product'
+    ).order_by('sla_expiration_date')[:10]
+
+    sla_approaching_data = [{
+        'id': f.id,
+        'title': f.title[:50] + '...' if len(f.title) > 50 else f.title,
+        'severity': f.severity,
+        'days_remaining': (f.sla_expiration_date - today).days,
+        'product': f.test.engagement.product.name,
+        'url': reverse('view_finding', args=[f.id]),
+    } for f in sla_approaching]
+
+    # KEV Matches (Known Exploited Vulnerabilities)
+    kev_matches = findings.filter(
+        triage_state='pending',
+        known_exploited=True
+    ).select_related(
+        'test__engagement__product'
+    ).order_by('-priority_score')[:10]
+
+    kev_matches_data = [{
+        'id': f.id,
+        'title': f.title[:50] + '...' if len(f.title) > 50 else f.title,
+        'severity': f.severity,
+        'priority_score': f.priority_score,
+        'product': f.test.engagement.product.name,
+        'url': reverse('view_finding', args=[f.id]),
+    } for f in kev_matches]
+
+    # High EPSS Findings (EPSS > 0.5)
+    high_epss = findings.filter(
+        triage_state='pending',
+        epss_score__gte=0.5
+    ).select_related(
+        'test__engagement__product'
+    ).order_by('-epss_score')[:10]
+
+    high_epss_data = [{
+        'id': f.id,
+        'title': f.title[:50] + '...' if len(f.title) > 50 else f.title,
+        'severity': f.severity,
+        'epss_score': round(f.epss_score, 4),
+        'product': f.test.engagement.product.name,
+        'url': reverse('view_finding', args=[f.id]),
+    } for f in high_epss]
+
+    # Stale Findings (pending for > 30 days)
+    stale_findings = findings.filter(
+        triage_state='pending',
+        date__lt=thirty_days_ago
+    ).select_related(
+        'test__engagement__product'
+    ).order_by('date')[:10]
+
+    stale_findings_data = [{
+        'id': f.id,
+        'title': f.title[:50] + '...' if len(f.title) > 50 else f.title,
+        'severity': f.severity,
+        'age_days': (today - f.date).days,
+        'product': f.test.engagement.product.name,
+        'url': reverse('view_finding', args=[f.id]),
+    } for f in stale_findings]
+
+    add_breadcrumb(title="Triage Dashboard", top_level=True, request=request)
+    return render(request, 'dojo/triage_dashboard_modern.html', {
+        # KPIs
+        'total_open': total_open,
+        'p0_p1_count': p0_p1_count,
+        'sla_breaches': sla_breaches,
+        'triage_rate': triage_rate,
+        # Charts
+        'priority_data_json': json.dumps(priority_data),
+        'severity_data_json': json.dumps(severity_data),
+        'trend_labels_json': json.dumps(trend_labels),
+        'trend_values_json': json.dumps(trend_values),
+        # Action Widgets
+        'sla_approaching': sla_approaching_data,
+        'kev_matches': kev_matches_data,
+        'high_epss': high_epss_data,
+        'stale_findings': stale_findings_data,
+    })

@@ -3,6 +3,10 @@ from django.urls import re_path
 from dojo.finding import views
 
 urlpatterns = [
+    # Triage views (modern UI)
+    re_path(r"^triage/queue$", views.triage_queue, name="triage_queue"),
+    re_path(r"^triage/dashboard$", views.triage_dashboard, name="triage_dashboard"),
+
     # CRUD operations
     re_path(
         r"^finding/(?P<finding_id>\d+)$",
