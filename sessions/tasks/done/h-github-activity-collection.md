@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 created: 2025-11-16
 updated: 2025-11-22
 priority: high
