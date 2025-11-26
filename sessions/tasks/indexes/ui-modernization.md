@@ -14,8 +14,7 @@ description: Tasks related to modernizing DefectDojo's frontend UI using Tailwin
 - `h-fix-ui-graphical-errors-and-validation.md` - Master-class UI review: Fix graphical errors, validate backend integration, identify improvements via Playwright MCP
 
 ### Medium Priority
-- `m-github-activity-dashboard.md` - GitHub-specific visualizations (repo activity, webhooks, contributor graphs)
-- `m-data-tables-component.md` - Enterprise data tables with virtual scrolling and sticky headers
+- `m-refactor-ui-design-review.md` - Design expert review of modern UI using Chrome DevTools MCP for live browser inspection
 
 ### Foundation Complete
 - `h-implement-enterprise-dashboard-design/` - Dashboard foundation complete (dark-mode-first, command palette, sidebar)
@@ -30,3 +29,5 @@ description: Tasks related to modernizing DefectDojo's frontend UI using Tailwin
 - `h-dashboard-refined-redesign.md` - Enterprise dark-mode-first dashboard implementation with command palette, collapsible sidebar, and Chart.js visualizations
 - `h-fix-modern-ui-routing.md` - Fixed dashboard URL routing to use modern template by default (2025-01-20)
 - `h-comprehensive-ui-modernization.md` - Phase 1 comprehensive UI audit with Playwright validation: 26 issues fixed, violet accent unified, navigation refactored (2025-11-20)
+- `m-github-activity-dashboard.md` - GitHub-specific visualizations (repo activity, webhooks, contributor graphs) (2025-11-26)
+- `m-data-tables-component.md` - Enterprise data tables with virtual scrolling and sticky headers (2025-11-26)
