@@ -161,3 +161,4 @@ test-results/
 
 # Frontend dependencies (dojo/frontend has its own node_modules)
 node_modules/
+cookies.txt
