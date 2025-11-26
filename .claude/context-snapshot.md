@@ -1,5 +1,5 @@
 # Context Snapshot
-**Created:** 2025-11-25 14:07:56
+**Created:** 2025-11-25 21:47:57
 **Trigger:** AUTO compaction
 **Session:** 98b98711...
 **Purpose:** Pre-compaction context preservation for recovery
@@ -26,11 +26,12 @@
 ## Git Context
 
 **Available:** Yes
-**Branch:** feature/consumption-signals
-**Last Commit:** 19c0c28ec - feat: Complete triage dashboard implementation (Phase 3) (12 hours ago)
+**Branch:** feature/notification-routing
+**Last Commit:** 8654438b0 - feat: Implement consumption signals for vulnerability prioritization (Phase 4) (4 hours ago)
 
 ### Recent Commits (Last 10)
 ```
+* 8654438b0 feat: Implement consumption signals for vulnerability prioritization (Phase 4)
 * 19c0c28ec feat: Complete triage dashboard implementation (Phase 3)
 * e878d8cac feat: Implement triage dashboard and queue UI (Phase 3)
 * 67da64005 docs: Add context manifest for triage dashboard task
@@ -40,47 +41,75 @@
 * b21948c22 docs: Complete vulnerability prioritization strategy research
 * 606d55910 docs: Add vulnerability prioritization strategy and implementation tasks
 * d95f3e870 chore: Update context snapshot
-* 841959800 feat: Create vulnerability prioritization strategy task
 ```
 
 ### Working Tree Status
 ```
-M dojo/models.py
- M sessions/tasks/h-implement-consumption-signals.md
-?? dojo/db_migrations/0263_repository_consumption_signals.py
+M .claude/context-snapshot.md
+ M dojo/models.py
+ M dojo/settings/settings.dist.py
+ M dojo/tasks.py
+ M sessions/tasks/h-implement-notification-routing.md
+?? dojo/db_migrations/0264_priority_digest_queue.py
+?? dojo/db_migrations/0265_notifications_priority_fields.py
+?? dojo/finding/priority_router.py
+?? dojo/templates/notifications/alert/priority_alert_immediate.tpl
+?? dojo/templates/notifications/alert/priority_alert_standard.tpl
+?? dojo/templates/notifications/alert/priority_digest_daily.tpl
+?? dojo/templates/notifications/alert/priority_digest_weekly.tpl
+?? dojo/templates/notifications/mail/priority_alert_immediate.tpl
+?? dojo/templates/notifications/mail/priority_alert_standard.tpl
+?? dojo/templates/notifications/mail/priority_digest_daily.tpl
+?? dojo/templates/notifications/mail/priority_digest_weekly.tpl
+?? dojo/templates/notifications/msteams/priority_alert_immediate.tpl
+?? dojo/templates/notifications/msteams/priority_alert_standard.tpl
+?? dojo/templates/notifications/msteams/priority_digest_daily.tpl
+?? dojo/templates/notifications/msteams/priority_digest_weekly.tpl
+?? dojo/templates/notifications/slack/priority_alert_immediate.tpl
+?? dojo/templates/notifications/slack/priority_alert_standard.tpl
+?? dojo/templates/notifications/slack/priority_digest_daily.tpl
+?? dojo/templates/notifications/slack/priority_digest_weekly.tpl
+?? dojo/templates/notifications/webhooks/priority_alert_immediate.tpl
+?? dojo/templates/notifications/webhooks/priority_alert_standard.tpl
+?? dojo/templates/notifications/webhooks/priority_digest_daily.tpl
+?? dojo/templates/notifications/webhooks/priority_digest_weekly.tpl
+?? unittests/test_priority_router.py
 ```
 
 ### Recent Changes Summary
 ```
-.claude/context-snapshot.md                        |   96 +-
- CLAUDE.md                                          |  193 +++-
+.claude/context-snapshot.md                        |  110 +-
+ CLAUDE.md                                          |  341 ++++++-
  dojo/api_v2/serializers.py                         |  167 +++
  dojo/api_v2/views.py                               |  122 +++
  dojo/auto_triage/engine.py                         |   28 +-
- dojo/db_migrations/0259_finding_priority_fields.py |   51 +
  .../0260_finding_triage_workflow_fields.py         |   86 ++
  dojo/db_migrations/0261_triage_history_model.py    |   89 ++
  dojo/db_migrations/0262_backfill_triage_state.py   |  104 ++
- dojo/finding/helper.py                             |   35 +-
- dojo/finding/priority_scorer.py                    |  353 +++++++
+ .../0263_repository_consumption_signals.py         |  125 +++
+ dojo/finding/priority_scorer.py                    |   47 +-
  dojo/finding/triage_service.py                     |  439 ++++++++
  dojo/finding/urls.py                               |    4 +
  dojo/finding/views.py                              |  283 ++++++
- .../commands/calculate_priority_scores.py          |  272 +++++
- dojo/models.py                                     |  143 +++
+ dojo/github_collector/__init__.py                  |    2 +
+ dojo/github_collector/dependency_graph.py          |  527 ++++++++++
+ dojo/github_collector/insights/consumption.py      |  397 ++++++++
+ dojo/github_collector/insights/registry.py         |    1 +
+ dojo/management/commands/build_dependency_graph.py |  170 ++++
+ dojo/models.py                                     |  156 +++
  dojo/templates/base_modern.html                    |   23 +-
  dojo/templates/dojo/triage_dashboard_modern.html   |  722 +++++++++++++
  dojo/templates/dojo/triage_queue_modern.html       | 1058 ++++++++++++++++++++
  .../docs/vulnerability-prioritization-strategy.md  |   42 +-
- .../tasks/done/h-implement-priority-scoring.md     |  881 ++++++++++++++++
+ .../tasks/done/h-implement-consumption-signals.md  |  611 +++++++++++
  .../tasks/done/h-implement-triage-dashboard.md     |  506 ++++++++++
  sessions/tasks/done/h-implement-triage-workflow.md |  722 +++++++++++++
- sessions/tasks/h-implement-priority-scoring.md     |   64 --
+ sessions/tasks/h-implement-consumption-signals.md  |   77 --
  sessions/tasks/h-implement-triage-dashboard.md     |   67 --
  sessions/tasks/h-implement-triage-workflow.md      |   69 --
- unittests/test_priority_scorer.py                  |  639 ++++++++++++
+ unittests/test_dependency_graph.py                 |  402 ++++++++
  unittests/test_triage_workflow.py                  |  712 +++++++++++++
- 28 files changed, 7705 insertions(+), 265 deletions(-)
+ 31 files changed, 7908 insertions(+), 301 deletions(-)
 ```
 
 ---
@@ -95,16 +124,16 @@ Files changed in last 24 hours:
 ## Conversation Analysis
 
 **Files Worked On:**
-  • dojo/templates/dojo/triage_dashboard_modern.html
-  • README.md
-  • dependency_parser.py
-  • -rw-r--r--@ 1 1haris.sid  staff    652 Nov 12 23:35 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/TEMPLATE.md\n-rw-r--r--@ 1 1haris.sid  staff  20167 Nov 20 22:17 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-fix-modern-ui-routing.md\n-rw-r--r--@ 1 1haris.sid  staff  31871 Nov 22 02:13 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-github-activity-collection.md\n-rw-r--r--@ 1 1haris.sid  staff   6896 Nov 17 19:40 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-github-cicd-validation.md\n-rw-r--r--@ 1 1haris.sid  staff   2726 Nov 24 22:04 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-implement-consumption-signals.md\n-rw-r--r--@ 1 1haris.sid  staff  51843 Nov 20 22:17 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-implement-core-pages-modern-ui.md\n-rw-r--r--@ 1 1haris.sid  staff   2879 Nov 24 22:04 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-implement-notification-routing.md\n-rw-------@ 1 1haris.sid  staff  22824 Nov 20 13:43 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-phase1-url-routing-switchover.md\n-rw-------@ 1 1haris.sid  staff  19415 Nov 20 14:05 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-template-modernization-tracker.md\n-rw-r--r--@ 1 1haris.sid  staff  13244 Nov 22 01:52 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-test-phase4-validation-BUGS.md\n-rw-r--r--@ 1 1haris.sid  staff  10515 Nov 20 22:17 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/h-ui-modernization.md\n-rw-r--r--@ 1 1haris.sid  staff   4019 Nov 20 22:17 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/m-data-tables-component.md\n-rw-r--r--@ 1 1haris.sid  staff   3496 Nov 20 22:17 /Users/1haris.sid/defectdojo/RepoRelay/sessions/tasks/m-github-activity-dashboard.md
-  • pyproject.toml
-  • dojo/models.py
-  • sessions/docs/vulnerability-prioritization-strategy.md
-  • unittests/github_collector/test_dependency_graph.py
-  • /Users/1haris.sid/defectdojo/RepoRelay/unittests/github_collector/test_dependency_parser.py
-  • dojo/finding/priority_scorer.py
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/webhooks/other.tpl
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/msteams/priority_alert_immediate.tpl
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/mail/priority_alert_immediate.tpl
+  • File created successfully at: /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/msteams/priority_digest_weekly.tpl
+  • File created successfully at: /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/webhooks/priority_digest_weekly.tpl
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/webhooks/priority_alert_immediate.tpl
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/msteams/priority_digest_daily.tpl
+  • File created successfully at: /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/msteams/priority_digest_daily.tpl
+  • Add Celery tasks in dojo/tasks.py
+  • /Users/1haris.sid/defectdojo/RepoRelay/dojo/templates/notifications/msteams/sla_breach.tpl
 
 **Tools Used:**
 None identified
@@ -112,15 +141,7 @@ None identified
 **Commands Executed:** 0
 
 **Recent Context:**
-  • Great! Let me revise the plan to use GitHub's SBOM API instead of custom parsers:
-
----
-
-```markdown
-[PLAN: Implementation Approach (Revised)]
-Using Gi...
-  • Now let me generate the migration:...
-  • Migration generated. Let me apply it:...
+  • Unable to extract recent context
 
 ---
 
@@ -211,7 +232,7 @@ open http://localhost:8080
 
 When running recovery, validate these were preserved:
 - [ ] Project type and framework context (Node.js, Python, C/C++, C#/.NET)
-- [ ] Git branch and recent commits (feature/consumption-signals)
+- [ ] Git branch and recent commits (feature/notification-routing)
 - [ ] Key configuration files awareness
 - [ ] Recent work focus and file modifications
 - [ ] Claude.md project guidelines

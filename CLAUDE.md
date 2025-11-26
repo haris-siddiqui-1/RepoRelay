@@ -130,6 +130,45 @@ docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --
 docker compose exec uwsgi bash -c "python manage.py calculate_priority_scores --async"
 ```
 
+### Priority Notification Commands
+```bash
+# Notification routing is automatic via PriorityRouter service
+# Configured via environment variables in docker-compose.yml or .env file:
+# DD_NOTIFICATION_P0_P1_IMMEDIATE=True
+# DD_NOTIFICATION_P2_DELAY_MINUTES=60
+# DD_NOTIFICATION_DAILY_DIGEST_TIME=09:00
+# DD_NOTIFICATION_WEEKLY_DIGEST_DAY=monday
+# DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED=True
+
+# Celery Beat tasks run automatically (configured in settings.dist.py):
+# - send-priority-standard-notifications: Every 15 minutes
+# - send-priority-daily-digest: Daily at 9:00 AM
+# - send-priority-weekly-digest: Monday 9:00 AM
+
+# Manual testing - trigger digest generation
+docker compose exec uwsgi bash -c "python manage.py shell"
+>>> from dojo.finding.priority_router import PriorityRouter
+>>> router = PriorityRouter()
+>>> router.send_daily_digest()  # Returns count of findings in digest
+>>> router.send_weekly_digest()
+>>> router.get_digest_preview('daily')  # Preview without sending
+
+# Manually trigger Celery tasks (for testing)
+docker compose exec celeryworker bash -c "celery -A dojo call dojo.tasks.send_priority_standard_notifications"
+docker compose exec celeryworker bash -c "celery -A dojo call dojo.tasks.send_priority_daily_digest"
+docker compose exec celeryworker bash -c "celery -A dojo call dojo.tasks.send_priority_weekly_digest"
+
+# Check notification queue status
+docker compose exec uwsgi bash -c "python manage.py shell"
+>>> from dojo.models import PriorityDigestQueue
+>>> PriorityDigestQueue.objects.filter(sent_at__isnull=True).count()  # Pending items
+>>> PriorityDigestQueue.objects.filter(digest_type='daily', sent_at__isnull=True).count()
+>>> PriorityDigestQueue.objects.filter(digest_type='weekly', sent_at__isnull=True).count()
+
+# Clear notification queue (for testing)
+>>> PriorityDigestQueue.objects.all().delete()
+```
+
 ### Dependency Graph Commands
 ```bash
 # Build dependency graph for all repositories (analyzes SBOM data)
@@ -540,6 +579,181 @@ Modern vulnerability triage interface with priority queue and analytics dashboar
 ```python
 re_path(r'^triage/queue$', views.triage_queue, name='triage_queue'),
 re_path(r'^triage/dashboard$', views.triage_dashboard, name='triage_dashboard'),
+```
+
+#### Notification Routing System (Phase 5 - January 2025)
+
+Intelligent notification routing that reduces developer alert fatigue by batching low-priority findings into digests while ensuring critical vulnerabilities receive immediate attention:
+
+**PriorityRouter Service** (`dojo/finding/priority_router.py`):
+- Routes notifications based on priority bucket with configurable delivery schedules
+- Methods:
+  - `route_finding_notification(finding, event, **kwargs)` - Main routing entry point
+  - `send_standard_notifications()` - Process P2 queue with configured delay
+  - `send_daily_digest()` - Generate and send P3 daily digest
+  - `send_weekly_digest()` - Generate and send P4 weekly digest
+  - `get_digest_preview(digest_type)` - Preview digest contents before sending
+
+**Routing Rules:**
+
+| Priority | Notification Type | Timing | Event Name | Recipients |
+|----------|------------------|--------|------------|------------|
+| P0 | Immediate alert | Real-time | `priority_alert_immediate` | Security team + repo owner |
+| P1 | Immediate alert | Real-time | `priority_alert_immediate` | Security team |
+| P2 | Standard notification | 1 hour delay (configurable) | `priority_alert_standard` | Security team |
+| P3 | Daily digest | Once daily at 9:00 AM | `priority_digest_daily` | Security team |
+| P4 | Weekly digest | Monday 9:00 AM | `priority_digest_weekly` | Optional |
+| Auto-accepted | None | Suppressed | - | - |
+
+**PriorityDigestQueue Model** (`dojo/models.py:4986-5050`):
+- Tracks findings pending digest notifications
+- Fields: `finding` (ForeignKey), `digest_type` (standard/daily/weekly), `queued_at` (DateTimeField), `sent_at` (DateTimeField)
+- Unique constraint `unique_pending_digest_entry` prevents race conditions (same finding cannot be queued twice for same digest type while unsent)
+- Benefits over direct filtering:
+  - Prevents race conditions (finding created after query but before send)
+  - Provides audit trail of what was included in each digest
+  - Enables digest preview before sending
+  - Retry-safe (idempotent digest generation)
+
+**Notification Events** (Notifications model):
+Four new MultiSelectField events added to Notifications model (`dojo/models.py:5399-5422`):
+- `priority_alert_immediate` - P0/P1 critical priority findings (default: all channels)
+- `priority_alert_standard` - P2 medium priority findings with 1-hour delay (default: all channels)
+- `priority_digest_daily` - P3 low priority daily digest (default: all channels)
+- `priority_digest_weekly` - P4 minimal priority weekly digest (default: none)
+
+Users can customize channel preferences per event (alert, mail, slack, msteams, webhooks).
+
+**Configuration Settings** (`dojo/settings/settings.dist.py`):
+
+Environment variables (lines 242-246):
+```python
+DD_NOTIFICATION_P0_P1_IMMEDIATE=(bool, True)           # Enable immediate P0/P1 alerts
+DD_NOTIFICATION_P2_DELAY_MINUTES=(int, 60)             # Delay for P2 notifications (default 1 hour)
+DD_NOTIFICATION_DAILY_DIGEST_TIME=(str, "09:00")       # Time for daily digest (HH:MM format)
+DD_NOTIFICATION_WEEKLY_DIGEST_DAY=(str, "monday")      # Day of week for weekly digest
+DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED=(bool, True)    # Suppress notifications for accepted/dismissed findings
+```
+
+Settings assignments (lines 706-710):
+```python
+NOTIFICATION_P0_P1_IMMEDIATE = env("DD_NOTIFICATION_P0_P1_IMMEDIATE")
+NOTIFICATION_P2_DELAY_MINUTES = env("DD_NOTIFICATION_P2_DELAY_MINUTES")
+NOTIFICATION_DAILY_DIGEST_TIME = env("DD_NOTIFICATION_DAILY_DIGEST_TIME")
+NOTIFICATION_WEEKLY_DIGEST_DAY = env("DD_NOTIFICATION_WEEKLY_DIGEST_DAY")
+NOTIFICATION_SUPPRESS_AUTO_ACCEPTED = env("DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED")
+```
+
+**Celery Beat Schedule** (`dojo/settings/settings.dist.py:1268-1283`):
+
+Three periodic tasks registered:
+```python
+"send-priority-standard-notifications": {
+    "task": "dojo.tasks.send_priority_standard_notifications",
+    "schedule": timedelta(minutes=15),  # Every 15 minutes
+},
+"send-priority-daily-digest": {
+    "task": "dojo.tasks.send_priority_daily_digest",
+    "schedule": crontab(hour=9, minute=0),  # Daily at 9:00 AM
+},
+"send-priority-weekly-digest": {
+    "task": "dojo.tasks.send_priority_weekly_digest",
+    "schedule": crontab(hour=9, minute=0, day_of_week=1),  # Monday 9:00 AM
+},
+```
+
+**Celery Tasks** (`dojo/tasks.py:185-234`):
+- `send_priority_standard_notifications()` - Process P2 queue every 15 minutes, send notifications for items older than `DD_NOTIFICATION_P2_DELAY_MINUTES`
+- `send_priority_daily_digest()` - Generate daily digest of P3 findings at configured time
+- `send_priority_weekly_digest()` - Generate weekly digest of P4 findings on configured day
+
+**Notification Templates** (20 templates across 5 channels):
+
+Template locations: `dojo/templates/notifications/{channel}/{event}.tpl`
+
+**Channels:**
+- `mail` - HTML email format with finding details, product links, and rich formatting
+- `slack` - Plain text optimized for Slack with block formatting
+- `msteams` - Adaptive Cards JSON format for Microsoft Teams
+- `webhooks` - JSON format for generic webhook integrations
+- `alert` - In-app alert format (stored in Alerts model)
+
+**Events:**
+- `priority_alert_immediate.tpl` - Single finding notification for P0/P1
+- `priority_alert_standard.tpl` - Single finding notification for P2
+- `priority_digest_daily.tpl` - Digest format for P3 findings (grouped by product)
+- `priority_digest_weekly.tpl` - Digest format for P4 findings (grouped by product)
+
+**Template Context Variables:**
+- Single alerts: `finding`, `priority_bucket`, `product`, `severity`, `url`, `user`, `system_settings`
+- Digests: `findings`, `digest_type`, `product_groups`, `total_count`, `date_range`, `user`, `system_settings`
+
+**Notification Suppression Logic:**
+
+Findings are suppressed from all notifications if:
+- `triage_state == 'accepted'` - Risk has been formally accepted
+- `triage_state == 'dismissed'` - Finding is false positive or won't fix
+- `DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED == True` (default)
+
+Suppression is checked in `PriorityRouter._should_suppress()` method before any routing decision.
+
+**Integration Points:**
+
+The PriorityRouter integrates with the existing notification system at three key points:
+
+1. **Scan Import/Re-Import** (`dojo/importers/base_importer.py`, `default_importer.py`):
+   - After finding creation/update, call `route_finding_notification()` instead of direct `create_notification()`
+   - Router determines appropriate routing based on priority bucket
+
+2. **Manual Finding Creation** (`dojo/finding/helper.py`):
+   - In `post_process_finding_save()` function, route through PriorityRouter
+   - Ensures consistent notification behavior regardless of entry method
+
+3. **Triage State Changes** (`dojo/finding/triage_service.py`):
+   - When finding escalated to P0/P1, trigger immediate notification
+   - Suppression logic prevents notifications for accepted/dismissed findings
+
+**Database Migrations:**
+- Migration 0264: Creates PriorityDigestQueue model with unique_pending_digest_entry constraint
+- Migration 0265: Adds 4 notification event fields to Notifications model (priority_alert_immediate, priority_alert_standard, priority_digest_daily, priority_digest_weekly)
+
+**Design Principles:**
+- **Reduced Alert Fatigue**: Batch low-priority findings into digests instead of individual alerts
+- **Immediate Critical Response**: P0/P1 findings bypass delays for instant notification
+- **Configurable Delivery**: Organizations can tune delay times and digest schedules
+- **Multi-Channel Support**: All 5 notification channels (mail, slack, msteams, webhooks, alert) supported
+- **User Preference Control**: Each user can customize channel preferences per event type
+- **Audit Trail**: PriorityDigestQueue tracks what was sent when for compliance
+- **Race Condition Prevention**: Unique constraint ensures findings aren't duplicated in digests
+- **Graceful Suppression**: Auto-accepted findings don't generate noise
+
+**Performance Characteristics:**
+- Standard notification processing: Every 15 minutes, processes unsent P2 queue items
+- Digest generation: Single query per digest type, grouped by product for efficiency
+- Template rendering: Lazy loading, only renders for subscribed channels
+- Queue cleanup: Automatically marks sent_at timestamp to prevent reprocessing
+
+**Usage Example:**
+
+```python
+from dojo.finding.priority_router import PriorityRouter
+
+router = PriorityRouter()
+
+# Route finding notification based on priority
+result = router.route_finding_notification(
+    finding=finding_instance,
+    event="scan_added",
+    product=product_instance,
+)
+# Returns: 'immediate', 'queued_standard', 'queued_daily', 'queued_weekly', or 'suppressed'
+
+# Manually trigger digest generation (for testing)
+preview = router.get_digest_preview(digest_type="daily")
+# Returns: {'findings': [...], 'count': 42, 'product_groups': {...}}
+
+sent_count = router.send_daily_digest()
+# Returns: Number of findings included in digest
 ```
 
 ### GitHub Data Models (January 2025)

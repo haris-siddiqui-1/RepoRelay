@@ -180,6 +180,60 @@ def async_sla_compute_and_notify_task(*args, **kwargs):
         logger.exception("An unexpected error was thrown calling the SLA code")
 
 
+# Priority-based notification tasks (Phase 5 - Vulnerability Prioritization)
+@app.task
+def send_priority_standard_notifications(*args, **kwargs):
+    """
+    Send queued P2 (standard) notifications that have aged past the configured delay.
+
+    Called by Celery Beat every 15 minutes. Notifications are sent after the
+    DD_NOTIFICATION_P2_DELAY_MINUTES delay (default 60 minutes).
+    """
+    logger.debug("Processing priority standard notifications")
+    try:
+        from dojo.finding.priority_router import PriorityRouter
+        router = PriorityRouter()
+        sent_count = router.send_standard_notifications()
+        if sent_count > 0:
+            logger.info("Sent %d priority standard notifications", sent_count)
+    except Exception:
+        logger.exception("Error processing priority standard notifications")
+
+
+@app.task
+def send_priority_daily_digest(*args, **kwargs):
+    """
+    Generate and send daily digest of P3 (low priority) findings.
+
+    Called by Celery Beat at 9:00 AM daily (configurable via DD_NOTIFICATION_DAILY_DIGEST_TIME).
+    """
+    logger.debug("Generating priority daily digest")
+    try:
+        from dojo.finding.priority_router import PriorityRouter
+        router = PriorityRouter()
+        findings_count = router.send_daily_digest()
+        logger.info("Sent daily digest with %d findings", findings_count)
+    except Exception:
+        logger.exception("Error generating priority daily digest")
+
+
+@app.task
+def send_priority_weekly_digest(*args, **kwargs):
+    """
+    Generate and send weekly digest of P4 (minimal priority) findings.
+
+    Called by Celery Beat on Monday 9:00 AM (configurable via DD_NOTIFICATION_WEEKLY_DIGEST_DAY).
+    """
+    logger.debug("Generating priority weekly digest")
+    try:
+        from dojo.finding.priority_router import PriorityRouter
+        router = PriorityRouter()
+        findings_count = router.send_weekly_digest()
+        logger.info("Sent weekly digest with %d findings", findings_count)
+    except Exception:
+        logger.exception("Error generating priority weekly digest")
+
+
 @app.task
 def jira_status_reconciliation_task(*args, **kwargs):
     return jira_status_reconciliation(*args, **kwargs)

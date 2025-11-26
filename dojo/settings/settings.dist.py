@@ -238,6 +238,12 @@ env = environ.FileAwareEnv(
     # finetuning settings for when enabled
     DD_SLA_NOTIFY_PRE_BREACH=(int, 3),
     DD_SLA_NOTIFY_POST_BREACH=(int, 7),
+    # Priority-based notification routing (Phase 5 - Vulnerability Prioritization)
+    DD_NOTIFICATION_P0_P1_IMMEDIATE=(bool, True),
+    DD_NOTIFICATION_P2_DELAY_MINUTES=(int, 60),
+    DD_NOTIFICATION_DAILY_DIGEST_TIME=(str, "09:00"),
+    DD_NOTIFICATION_WEEKLY_DIGEST_DAY=(str, "monday"),
+    DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED=(bool, True),
     # maximum number of result in search as search can be an expensive operation
     DD_SEARCH_MAX_RESULTS=(int, 100),
     DD_SIMILAR_FINDINGS_MAX_RESULTS=(int, 25),
@@ -695,6 +701,13 @@ SLA_NOTIFY_ACTIVE_VERIFIED_ONLY = env("DD_SLA_NOTIFY_ACTIVE_VERIFIED_ONLY")
 SLA_NOTIFY_WITH_JIRA_ONLY = env("DD_SLA_NOTIFY_WITH_JIRA_ONLY")  # Based on the 2 above, but only with a JIRA link
 SLA_NOTIFY_PRE_BREACH = env("DD_SLA_NOTIFY_PRE_BREACH")  # in days, notify between dayofbreach minus this number until dayofbreach
 SLA_NOTIFY_POST_BREACH = env("DD_SLA_NOTIFY_POST_BREACH")  # in days, skip notifications for findings that go past dayofbreach plus this number
+
+# Priority-based notification routing settings (Phase 5 - Vulnerability Prioritization)
+NOTIFICATION_P0_P1_IMMEDIATE = env("DD_NOTIFICATION_P0_P1_IMMEDIATE")  # Send P0/P1 notifications immediately
+NOTIFICATION_P2_DELAY_MINUTES = env("DD_NOTIFICATION_P2_DELAY_MINUTES")  # Delay for P2 notifications in minutes
+NOTIFICATION_DAILY_DIGEST_TIME = env("DD_NOTIFICATION_DAILY_DIGEST_TIME")  # Time for daily digest (HH:MM format)
+NOTIFICATION_WEEKLY_DIGEST_DAY = env("DD_NOTIFICATION_WEEKLY_DIGEST_DAY")  # Day of week for weekly digest
+NOTIFICATION_SUPPRESS_AUTO_ACCEPTED = env("DD_NOTIFICATION_SUPPRESS_AUTO_ACCEPTED")  # Suppress notifications for auto-accepted findings
 
 
 SEARCH_MAX_RESULTS = env("DD_SEARCH_MAX_RESULTS")
@@ -1254,6 +1267,19 @@ CELERY_BEAT_SCHEDULE = {
     "clear_sessions": {
         "task": "dojo.tasks.clear_sessions",
         "schedule": crontab(hour=0, minute=0, day_of_week=0),
+    },
+    # Priority-based notification tasks (Phase 5 - Vulnerability Prioritization)
+    "send-priority-standard-notifications": {
+        "task": "dojo.tasks.send_priority_standard_notifications",
+        "schedule": timedelta(minutes=15),  # Check every 15 minutes for P2 notifications past delay
+    },
+    "send-priority-daily-digest": {
+        "task": "dojo.tasks.send_priority_daily_digest",
+        "schedule": crontab(hour=9, minute=0),  # 9:00 AM daily (configurable via DD_NOTIFICATION_DAILY_DIGEST_TIME)
+    },
+    "send-priority-weekly-digest": {
+        "task": "dojo.tasks.send_priority_weekly_digest",
+        "schedule": crontab(hour=9, minute=0, day_of_week=1),  # Monday 9:00 AM (configurable via DD_NOTIFICATION_WEEKLY_DIGEST_DAY)
     },
     # 'jira_status_reconciliation': {
     #     'task': 'dojo.tasks.jira_status_reconciliation_task',

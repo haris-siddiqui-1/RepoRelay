@@ -4983,6 +4983,73 @@ class TriageHistory(models.Model):
         return f"{self.finding_id}: {self.action} -> {self.new_state} at {self.performed_at}"
 
 
+class PriorityDigestQueue(models.Model):
+    """
+    Queue for tracking findings pending priority-based digest notifications.
+
+    Used by PriorityRouter (Phase 5) to batch P2 (standard), P3 (daily),
+    and P4 (weekly) notifications instead of sending immediately.
+
+    Benefits over direct filtering:
+    - Prevents race conditions (finding created after query but before send)
+    - Provides audit trail of what was included in each digest
+    - Enables digest preview before sending
+    - Retry-safe (idempotent digest generation)
+    """
+    DIGEST_TYPE_CHOICES = (
+        ('standard', _('Standard (P2)')),
+        ('daily', _('Daily Digest (P3)')),
+        ('weekly', _('Weekly Digest (P4)')),
+    )
+
+    finding = models.ForeignKey(
+        Finding,
+        on_delete=models.CASCADE,
+        related_name='digest_queue_entries',
+        verbose_name=_("Finding"),
+        help_text=_("Finding queued for digest notification")
+    )
+    digest_type = models.CharField(
+        max_length=20,
+        choices=DIGEST_TYPE_CHOICES,
+        db_index=True,
+        verbose_name=_("Digest Type"),
+        help_text=_("Type of digest this finding is queued for")
+    )
+    queued_at = models.DateTimeField(
+        auto_now_add=True,
+        db_index=True,
+        verbose_name=_("Queued At"),
+        help_text=_("When the finding was added to the digest queue")
+    )
+    sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=_("Sent At"),
+        help_text=_("When the digest containing this finding was sent (null if pending)")
+    )
+
+    class Meta:
+        ordering = ['-queued_at']
+        verbose_name = _("Priority Digest Queue")
+        verbose_name_plural = _("Priority Digest Queue")
+        indexes = [
+            models.Index(fields=['digest_type', 'sent_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['finding', 'digest_type'],
+                condition=models.Q(sent_at__isnull=True),
+                name='unique_pending_digest_entry'
+            )
+        ]
+
+    def __str__(self):
+        status = "sent" if self.sent_at else "pending"
+        return f"{self.finding_id} ({self.digest_type}) - {status}"
+
+
 class FileAccessToken(models.Model):
 
     """
@@ -5328,6 +5395,36 @@ class Notifications(models.Model):
         verbose_name=_("SLA breach (combined)"),
         help_text=_("Get notified of (upcoming) SLA breaches (a message per project)"))
 
+    # Priority-based notification events (Phase 5 - Vulnerability Prioritization)
+    priority_alert_immediate = MultiSelectField(
+        choices=NOTIFICATION_CHOICES,
+        default=DEFAULT_NOTIFICATION,
+        blank=True,
+        verbose_name=_("Priority Alert (Immediate)"),
+        help_text=_("Get notified immediately for P0/P1 critical priority findings")
+    )
+    priority_alert_standard = MultiSelectField(
+        choices=NOTIFICATION_CHOICES,
+        default=DEFAULT_NOTIFICATION,
+        blank=True,
+        verbose_name=_("Priority Alert (Standard)"),
+        help_text=_("Get notified for P2 medium priority findings (1-hour delay)")
+    )
+    priority_digest_daily = MultiSelectField(
+        choices=NOTIFICATION_CHOICES,
+        default=DEFAULT_NOTIFICATION,
+        blank=True,
+        verbose_name=_("Priority Digest (Daily)"),
+        help_text=_("Get daily digest of P3 low priority findings")
+    )
+    priority_digest_weekly = MultiSelectField(
+        choices=NOTIFICATION_CHOICES,
+        default=[],
+        blank=True,
+        verbose_name=_("Priority Digest (Weekly)"),
+        help_text=_("Get weekly digest of P4 minimal priority findings (optional)")
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["user", "product"], name="notifications_user_product"),
@@ -5368,6 +5465,11 @@ class Notifications(models.Model):
                 result.sla_breach = {*result.sla_breach, *notifications.sla_breach}
                 result.sla_breach_combined = {*result.sla_breach_combined, *notifications.sla_breach_combined}
                 result.risk_acceptance_expiration = {*result.risk_acceptance_expiration, *notifications.risk_acceptance_expiration}
+                # Priority notification fields (Phase 5)
+                result.priority_alert_immediate = {*result.priority_alert_immediate, *notifications.priority_alert_immediate}
+                result.priority_alert_standard = {*result.priority_alert_standard, *notifications.priority_alert_standard}
+                result.priority_digest_daily = {*result.priority_digest_daily, *notifications.priority_digest_daily}
+                result.priority_digest_weekly = {*result.priority_digest_weekly, *notifications.priority_digest_weekly}
         return result
 
 
