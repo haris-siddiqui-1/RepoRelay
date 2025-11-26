@@ -117,20 +117,23 @@
 .dd-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
+    table-layout: auto;
+    min-width: 800px; /* Ensure horizontal scroll on narrow viewports */
 }
 
 /* Dual-table layout support */
 .dd-table-header-fixed {
     display: table;
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
+    min-width: 800px;
 }
 
 .dd-table-body-only {
     display: table;
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
+    min-width: 800px;
     background: var(--dd-table-bg);
 }
 
@@ -162,7 +165,18 @@
     color: var(--dd-table-text-muted);
     white-space: nowrap;
     user-select: none;
+    min-width: 80px; /* Prevent column collapse */
 }
+
+/* Column width hints - can be overridden inline */
+.dd-table-header th:first-child { min-width: 50px; } /* Checkbox */
+.dd-table-header th[data-col="id"] { min-width: 60px; }
+.dd-table-header th[data-col="severity"] { min-width: 100px; }
+.dd-table-header th[data-col="title"] { min-width: 180px; }
+.dd-table-header th[data-col="product"] { min-width: 150px; }
+.dd-table-header th[data-col="date"] { min-width: 100px; }
+.dd-table-header th[data-col="status"] { min-width: 80px; }
+.dd-table-header th[data-col="actions"] { min-width: 80px; }
 
 /* Sortable Column */
 .dd-table-header th.sortable {
@@ -265,6 +279,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    max-width: 250px; /* Prevent extreme stretching while allowing readable content */
 }
 
 /* Monospace for technical values */
@@ -273,9 +288,16 @@
     font-size: 13px;
 }
 
-/* Truncate long text with tooltip */
+/* Truncate long text with tooltip - explicit opt-in */
 .dd-table-cell.truncate {
     max-width: 200px;
+}
+
+/* Allow wrapping for title/description columns */
+.dd-table-cell.wrap {
+    white-space: normal;
+    word-break: break-word;
+    max-width: 300px;
 }
 
 /* ============================================
@@ -716,10 +738,37 @@
    RESPONSIVE
    ============================================ */
 
+/* Enable horizontal scrolling on tablets and below */
+@media (max-width: 1024px) {
+    .dd-table-scroll-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Visual indicator for horizontal scroll */
+    .dd-table-enterprise::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 40px;
+        background: linear-gradient(90deg, transparent, rgba(28, 33, 40, 0.8));
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 200ms ease;
+    }
+
+    .dd-table-enterprise.scrolled-right::after {
+        opacity: 0;
+    }
+}
+
 @media (max-width: 768px) {
     .dd-table-toolbar {
         flex-direction: column;
         align-items: stretch;
+        gap: 12px;
     }
 
     .dd-table-search {
@@ -727,18 +776,50 @@
     }
 
     .dd-table-cell {
-        padding: 8px 12px;
+        padding: 8px 10px;
         font-size: 13px;
     }
 
     .dd-table-header th {
-        padding: 8px 12px;
-        font-size: 11px;
+        padding: 8px 10px;
+        font-size: 10px;
+        min-width: 60px;
+    }
+
+    /* Reduce minimum widths on mobile */
+    .dd-table {
+        min-width: 600px;
+    }
+
+    .dd-table-header-fixed,
+    .dd-table-body-only {
+        min-width: 600px;
     }
 
     /* Hide less important columns on mobile */
     .dd-table .hide-mobile {
         display: none;
+    }
+
+    /* Pagination responsive */
+    .dd-table-pagination {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+    .dd-table-cell {
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+
+    .dd-table-header th {
+        padding: 6px 8px;
+        font-size: 9px;
+        letter-spacing: 0.02em;
     }
 }
 
