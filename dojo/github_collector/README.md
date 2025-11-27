@@ -140,9 +140,26 @@ python manage.py generate_insights --all --days 30 --product-type-id 5
 - **Ownership** (4 insights): Unassigned repos, multiple owners, orphaned repos, department distribution
 - **Technology** (4 insights): Popular languages, Docker adoption, Kubernetes usage, framework adoption
 
-**Documentation**: See CLAUDE.md "GitHub Insights Dashboard" section for comprehensive documentation.
+**Documentation**: See [README_INSIGHTS.md](./README_INSIGHTS.md)
 
-## 4. Product Migration Wizard
+## 4. Dependency Graph Analysis
+
+**Purpose**: Analyze GitHub SBOM data to identify internal dependency relationships and solve the "abandoned vs stable repository" problem.
+
+**Features**:
+- Uses GitHub SBOM API for dependency analysis
+- Tracks `dependent_repo_count`, `downstream_consumers`, `is_shared_library`
+- Computes `consumption_tier_override` based on consumption thresholds
+- Solves "abandoned vs stable" problem: High-consumption repos stay prioritized
+
+**Management Command**:
+```bash
+python manage.py build_dependency_graph --verbose
+```
+
+**Documentation**: See [README_DEPENDENCY_GRAPH.md](./README_DEPENDENCY_GRAPH.md)
+
+## 5. Product Migration Wizard
 
 **Purpose**: Migrate from "1 Product per Repository" to "1 Product per Application" using hierarchical clustering.
 
