@@ -269,6 +269,138 @@
             color: #f85149;
             border: 1px solid rgba(248, 81, 73, 0.2);
         }
+
+        /* Validation Checklist */
+        .validation-panel {
+            background: rgba(28, 33, 40, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 24px;
+            display: none;
+        }
+
+        .validation-panel.visible {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        .validation-panel h3 {
+            color: #F0F6FC;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .validation-checklist {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .validation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .validation-item:last-child {
+            border-bottom: none;
+        }
+
+        .validation-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .validation-icon.pending {
+            color: #8b949e;
+        }
+
+        .validation-icon.loading {
+            color: #8B5CF6;
+            animation: spin 1s linear infinite;
+        }
+
+        .validation-icon.pass {
+            color: #3fb950;
+        }
+
+        .validation-icon.fail {
+            color: #f85149;
+        }
+
+        .validation-icon.warning {
+            color: #d29922;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .validation-content {
+            flex: 1;
+        }
+
+        .validation-name {
+            color: #e6edf3;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .validation-message {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .validation-details {
+            color: #6e7681;
+            font-size: 12px;
+            margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .validation-summary {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .validation-summary.success {
+            color: #3fb950;
+        }
+
+        .validation-summary.error {
+            color: #f85149;
+        }
+
+        .btn-test {
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #a78bfa;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 200ms ease;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .btn-test:hover {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-test:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 {% endblock %}
 
@@ -404,6 +536,70 @@
                 <button type="submit" class="btn-primary">
                     Save Configuration
                 </button>
+                <button type="button" class="btn-test" id="testConnectionBtn" onclick="testConnection()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    Test Connection
+                </button>
+            </div>
+
+            <!-- Validation Results Panel -->
+            <div id="validationPanel" class="validation-panel">
+                <h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+                        <path d="M9 11l3 3L22 4"/>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    Validation Checklist
+                </h3>
+                <ul class="validation-checklist" id="validationChecklist">
+                    <li class="validation-item" data-check="token_format">
+                        <div class="validation-icon pending" id="icon_token_format">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Token Format</div>
+                            <div class="validation-message" id="msg_token_format">Waiting...</div>
+                        </div>
+                    </li>
+                    <li class="validation-item" data-check="token_scopes">
+                        <div class="validation-icon pending" id="icon_token_scopes">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Token Scopes</div>
+                            <div class="validation-message" id="msg_token_scopes">Waiting...</div>
+                            <div class="validation-details" id="details_token_scopes"></div>
+                        </div>
+                    </li>
+                    <li class="validation-item" data-check="account_exists">
+                        <div class="validation-icon pending" id="icon_account_exists">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Account Access</div>
+                            <div class="validation-message" id="msg_account_exists">Waiting...</div>
+                        </div>
+                    </li>
+                    <li class="validation-item" data-check="rate_limits">
+                        <div class="validation-icon pending" id="icon_rate_limits">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Rate Limits</div>
+                            <div class="validation-message" id="msg_rate_limits">Waiting...</div>
+                        </div>
+                    </li>
+                    <li class="validation-item" data-check="prerequisites">
+                        <div class="validation-icon pending" id="icon_prerequisites">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Database Prerequisites</div>
+                            <div class="validation-message" id="msg_prerequisites">Waiting...</div>
+                        </div>
+                    </li>
+                    <li class="validation-item" data-check="sample_fetch">
+                        <div class="validation-icon pending" id="icon_sample_fetch">○</div>
+                        <div class="validation-content">
+                            <div class="validation-name">Sample Fetch</div>
+                            <div class="validation-message" id="msg_sample_fetch">Waiting...</div>
+                        </div>
+                    </li>
+                </ul>
+                <div id="validationSummary" class="validation-summary"></div>
             </div>
         </form>
     </div>
@@ -474,4 +670,174 @@
         </form>
     </div>
 </div>
+
+<script>
+// CSRF token helper
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Icons
+const ICONS = {
+    pending: '○',
+    loading: '◌',
+    pass: '✓',
+    fail: '✗',
+    warning: '⚠'
+};
+
+// Check names for display
+const CHECK_NAMES = {
+    token_format: 'Token Format',
+    token_scopes: 'Token Scopes',
+    account_exists: 'Account Access',
+    rate_limits: 'Rate Limits',
+    prerequisites: 'Database Prerequisites',
+    sample_fetch: 'Sample Fetch'
+};
+
+// Update check status
+function updateCheckStatus(checkName, status, message, details = null) {
+    const iconEl = document.getElementById(`icon_${checkName}`);
+    const msgEl = document.getElementById(`msg_${checkName}`);
+    const detailsEl = document.getElementById(`details_${checkName}`);
+
+    if (iconEl) {
+        iconEl.textContent = ICONS[status] || ICONS.pending;
+        iconEl.className = `validation-icon ${status}`;
+    }
+    if (msgEl) {
+        msgEl.textContent = message || '';
+    }
+    if (detailsEl && details) {
+        detailsEl.textContent = details;
+    }
+}
+
+// Reset all checks to pending
+function resetChecks() {
+    const checks = ['token_format', 'token_scopes', 'account_exists', 'rate_limits', 'prerequisites', 'sample_fetch'];
+    checks.forEach(check => {
+        updateCheckStatus(check, 'pending', 'Waiting...');
+        const detailsEl = document.getElementById(`details_${check}`);
+        if (detailsEl) detailsEl.textContent = '';
+    });
+    document.getElementById('validationSummary').innerHTML = '';
+}
+
+// Set all checks to loading
+function setAllLoading() {
+    const checks = ['token_format', 'token_scopes', 'account_exists', 'rate_limits', 'prerequisites', 'sample_fetch'];
+    checks.forEach(check => {
+        updateCheckStatus(check, 'loading', 'Checking...');
+    });
+}
+
+// Main test connection function
+async function testConnection() {
+    const token = document.getElementById('github_token').value.trim();
+    const accountType = document.querySelector('input[name="account_type"]:checked')?.value || 'organization';
+    const accountName = document.getElementById('account_name').value.trim();
+
+    // Validate inputs
+    if (!token) {
+        alert('Please enter a GitHub token');
+        return;
+    }
+    if (!accountName) {
+        alert('Please enter an account name');
+        return;
+    }
+
+    // Show panel and set loading state
+    const panel = document.getElementById('validationPanel');
+    panel.classList.add('visible');
+    resetChecks();
+    setAllLoading();
+
+    // Disable button during test
+    const btn = document.getElementById('testConnectionBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="validation-icon loading" style="display: inline-block; width: 16px; height: 16px; margin-right: 6px;">◌</span> Testing...';
+
+    try {
+        const response = await fetch('{% url "github_test_connection" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                token: token,
+                account_type: accountType,
+                account_name: accountName
+            })
+        });
+
+        const data = await response.json();
+
+        // Update each check
+        for (const [checkName, checkResult] of Object.entries(data.checks)) {
+            const status = checkResult.status;
+            let message = checkResult.message || '';
+            let details = null;
+
+            // Add scope details for token_scopes
+            if (checkName === 'token_scopes' && checkResult.scopes) {
+                details = `Scopes: ${checkResult.scopes.join(', ')}`;
+            }
+
+            // Add repository count for account_exists
+            if (checkName === 'account_exists' && checkResult.repository_count !== undefined) {
+                message += ` (${checkResult.repository_count} repositories)`;
+            }
+
+            updateCheckStatus(checkName, status, message, details);
+        }
+
+        // Update summary
+        const summaryEl = document.getElementById('validationSummary');
+        if (data.valid) {
+            if (data.ready_to_sync) {
+                summaryEl.className = 'validation-summary success';
+                summaryEl.innerHTML = '✓ All checks passed. Ready to sync!';
+            } else {
+                summaryEl.className = 'validation-summary';
+                summaryEl.innerHTML = '⚠ Validation passed with warnings. Review before syncing.';
+            }
+        } else {
+            summaryEl.className = 'validation-summary error';
+            const errorCount = data.errors ? data.errors.length : 0;
+            summaryEl.innerHTML = `✗ ${errorCount} check(s) failed. Please fix the issues above before saving.`;
+        }
+
+    } catch (error) {
+        console.error('Test connection error:', error);
+        const summaryEl = document.getElementById('validationSummary');
+        summaryEl.className = 'validation-summary error';
+        summaryEl.innerHTML = `✗ Connection test failed: ${error.message}`;
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            Test Connection
+        `;
+    }
+}
+</script>
 {% endblock %}

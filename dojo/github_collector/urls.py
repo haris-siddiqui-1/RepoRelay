@@ -15,6 +15,13 @@ urlpatterns = [
         name='github_sync_configuration'
     ),
 
+    # GitHub Test Connection (AJAX endpoint)
+    re_path(
+        r'^github/sync/test-connection$',
+        github_collector_views.github_test_connection,
+        name='github_test_connection'
+    ),
+
     # GitHub Insights Dashboard
     re_path(
         r'^github/insights/dashboard$',
