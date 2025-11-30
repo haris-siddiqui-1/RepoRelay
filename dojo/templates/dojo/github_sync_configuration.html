@@ -776,7 +776,7 @@ async function testConnection() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken')
+                'X-CSRFToken': document.querySelector('input[name="csrfmiddlewaretoken"]').value
             },
             body: JSON.stringify({
                 token: token,

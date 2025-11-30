@@ -1,6 +1,7 @@
 ---
+name: Implement GitHub Ingestion Validation
 branch: feature/github-validation
-status: active
+status: completed
 priority: high
 created: 2025-11-27
 ---

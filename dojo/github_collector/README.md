@@ -4,17 +4,19 @@ The GitHub Collector is DefectDojo's comprehensive integration system for GitHub
 
 ## Overview
 
-This module provides four major subsystems for GitHub integration:
+This module provides five major subsystems for GitHub integration:
 
-1. **Repository Metadata Enrichment** - GraphQL-powered collector for repository context
-2. **Security Alerts Collection** - Automated sync of GitHub security alerts to DefectDojo Findings
-3. **Insights Dashboard** - Widget-based analytics with 25 built-in insights
-4. **Product Migration Wizard** - Hierarchical clustering for repository-to-product consolidation
+1. **Setup Validation** - Pre-flight checks for token scopes, rate limits, and prerequisites
+2. **Repository Metadata Enrichment** - GraphQL-powered collector for repository context
+3. **Security Alerts Collection** - Automated sync of GitHub security alerts to DefectDojo Findings
+4. **Insights Dashboard** - Widget-based analytics with 25 built-in insights
+5. **Product Migration Wizard** - Hierarchical clustering for repository-to-product consolidation
 
 ## Architecture
 
 ```
 dojo/github_collector/
+├── validator.py              # GitHub setup validation (6 checks)
 ├── collector.py              # Main repository metadata collector (GraphQL + REST)
 ├── graphql_client.py         # GitHub GraphQL API v4 client
 ├── rest_client.py            # GitHub REST API v3 client (fallback)
@@ -36,10 +38,128 @@ dojo/github_collector/
 ├── queries/                  # GraphQL query templates
 │   ├── repository_full.graphql
 │   └── organization_batch.graphql
-└── urls.py                   # URL routing for insights dashboard
+├── views.py                  # Web UI views (configuration, test connection)
+└── urls.py                   # URL routing for insights dashboard and validation
 ```
 
-## 1. Repository Metadata Enrichment
+## 1. Setup Validation
+
+**Purpose**: Validate GitHub configuration before attempting sync operations to prevent wasted API quota and ensure successful data ingestion.
+
+**Features**:
+- **6-Step Validation Checklist**:
+  1. Token format validation (ghp_* or github_pat_*)
+  2. Token scope verification via X-OAuth-Scopes header (repo, read:org, security_events)
+  3. Organization/user existence and accessibility check
+  4. Rate limit availability (GraphQL ≥1000 points, REST ≥500 calls)
+  5. Database prerequisites (Test_Type records for Dependabot, CodeQL, Secret Scanning)
+  6. Sample repository fetch test (end-to-end API access)
+- **Web UI**: "Test Connection" button at `/github/sync/configuration` with real-time progress feedback
+- **Management Command**: `validate_github_setup` for CI/CD integration
+- **Exit Codes**: 0=pass, 1=warnings, 2=failures
+- **Output Formats**: Human-readable report or JSON
+
+**Management Command**:
+```bash
+# Basic validation using configured token
+python manage.py validate_github_setup
+
+# Override token and organization
+python manage.py validate_github_setup --token ghp_xxx --org myorg
+
+# JSON output for CI/CD pipelines
+python manage.py validate_github_setup --json
+```
+
+**Example Output**:
+```
+GitHub Integration Validation Report
+==================================================
+
+Token Validation
+  ✓ Format: Token format valid
+  ✓ Scopes: repo, read:org, security_events
+
+Account Validation
+  ✓ Account 'myorg' exists (142 repositories)
+
+Rate Limits
+  ✓ GraphQL: 4,500 / 5,000 remaining (90%)
+  ✓ REST: 4,800 / 5,000 remaining (96%)
+
+Prerequisites
+  ✓ Test_Type 'GitHub Dependabot' exists
+  ✓ Test_Type 'GitHub CodeQL' exists
+  ✓ Test_Type 'GitHub Secret Scanning' exists
+
+Sample Fetch
+  ✓ Successfully fetched: myorg/example-repo
+
+==================================================
+Status: READY TO SYNC
+```
+
+**Error Messages and Remediation**:
+
+| Error | Remediation |
+|-------|-------------|
+| Token missing 'repo' scope | Regenerate token with 'repo' scope selected |
+| Token missing 'read:org' scope | Regenerate token with 'read:org' scope selected |
+| Token missing 'security_events' scope | Regenerate token with 'security_events' scope selected |
+| Organization not found | Verify organization name spelling and token access |
+| Rate limit exhausted | Wait for rate limit reset or use different token |
+| Test_Type missing | Run: python manage.py migrate |
+
+**Web UI Endpoint**:
+- **URL**: `/github/sync/test-connection` (POST endpoint, AJAX)
+- **Request Body**: `{"token": "...", "account_type": "organization", "account_name": "myorg"}`
+- **Response Format**:
+```json
+{
+  "valid": true,
+  "ready_to_sync": true,
+  "checks": {
+    "token_format": {"status": "pass", "message": "Token format valid"},
+    "token_scopes": {"status": "pass", "scopes": ["repo", "read:org", "security_events"]},
+    "account_exists": {"status": "pass", "repository_count": 142},
+    "rate_limits": {"status": "pass", "graphql_remaining": 4500, "rest_remaining": 4800},
+    "prerequisites": {"status": "pass", "all_present": true},
+    "sample_fetch": {"status": "pass", "sample_repo": "myorg/example-repo"}
+  },
+  "warnings": [],
+  "errors": []
+}
+```
+
+**Validator Class** (`dojo/github_collector/validator.py`):
+- `GitHubValidator(token, account_type, account_name)` - Main validation orchestrator
+- `validate_token_format()` - Step 1: Format check
+- `validate_token_scopes()` - Step 2: Scope detection via API headers
+- `validate_account_exists()` - Step 3: Organization/user existence
+- `check_rate_limits()` - Step 4: Available API quota
+- `check_test_type_prerequisites()` - Step 5: Database prerequisites
+- `validate_sample_fetch()` - Step 6: Sample repository fetch
+- `validate_full_setup()` - Run all checks, return ValidationResult
+- `to_dict()` - Convert ValidationResult to JSON-serializable dict
+
+**Required Scopes**:
+- `repo` - Full control of private repositories (or `public_repo` for public only)
+- `read:org` - Read org and team membership
+- `security_events` - Read security events (Dependabot, CodeQL, Secret Scanning alerts)
+
+**Rate Limit Thresholds**:
+- GraphQL minimum: 1,000 points (enough for ~25-30 full repository syncs)
+- REST minimum: 500 calls (enough for ~250 repository alert fetches)
+- Warning thresholds: GraphQL <500 points, REST <100 calls
+
+**Use Cases**:
+1. **Initial Setup**: Validate configuration before first sync attempt
+2. **Troubleshooting**: Diagnose sync failures with specific error messages
+3. **CI/CD Integration**: Automated validation in deployment pipelines with JSON output
+4. **Token Rotation**: Verify new token has correct scopes before replacing old token
+5. **Monitoring**: Proactive rate limit checks before scheduled syncs
+
+## 2. Repository Metadata Enrichment
 
 **Purpose**: Sync GitHub repository metadata to DefectDojo's Repository model with 47 enrichment fields.
 
@@ -72,7 +192,7 @@ python manage.py sync_github_repositories --incremental
 - Implementation details: [README_GRAPHQL.md](./README_GRAPHQL.md) and [GRAPHQL_VERIFICATION.md](./GRAPHQL_VERIFICATION.md)
 - Web UI guide: [README_SYNC_UI.md](./README_SYNC_UI.md)
 
-## 2. Security Alerts Collection
+## 3. Security Alerts Collection
 
 **Purpose**: Fetch and sync GitHub security alerts (Dependabot, CodeQL, Secret Scanning) to DefectDojo Findings.
 
@@ -104,7 +224,7 @@ python manage.py sync_github_alerts --dry-run
 
 **Documentation**: See [README_ALERTS.md](./README_ALERTS.md)
 
-## 3. Insights Dashboard
+## 4. Insights Dashboard
 
 **Purpose**: Provide repository management analytics through a configurable widget-based UI.
 
@@ -142,7 +262,7 @@ python manage.py generate_insights --all --days 30 --product-type-id 5
 
 **Documentation**: See [README_INSIGHTS.md](./README_INSIGHTS.md)
 
-## 4. Dependency Graph Analysis
+## 5. Dependency Graph Analysis
 
 **Purpose**: Analyze GitHub SBOM data to identify internal dependency relationships and solve the "abandoned vs stable repository" problem.
 
@@ -159,7 +279,7 @@ python manage.py build_dependency_graph --verbose
 
 **Documentation**: See [README_DEPENDENCY_GRAPH.md](./README_DEPENDENCY_GRAPH.md)
 
-## 5. Product Migration Wizard
+## 6. Product Migration Wizard
 
 **Purpose**: Migrate from "1 Product per Repository" to "1 Product per Application" using hierarchical clustering.
 
@@ -252,9 +372,15 @@ All GitHub integration requires:
   - `read:org` - Read org and team membership
   - `security_events` - Read security events (alerts)
 
+**Validation**: Before first sync, run `python manage.py validate_github_setup` to verify token scopes, rate limits, and prerequisites. See [Section 1: Setup Validation](#1-setup-validation) for details.
+
 ## Testing
 
 ```bash
+# Validate GitHub setup (recommended first step)
+python manage.py validate_github_setup
+python manage.py validate_github_setup --json
+
 # Test GraphQL client
 python dojo/github_collector/test_graphql.py
 
@@ -274,10 +400,15 @@ python manage.py sync_github_alerts --dry-run
 - Secondary rate limits apply (undocumented thresholds)
 
 ### Common Issues
-1. **Missing GitHub token**: Set `DD_GITHUB_TOKEN` environment variable
-2. **Rate limit exceeded**: Wait for rate limit reset (check `X-RateLimit-Reset` header)
-3. **GraphQL query too complex**: Reduce batch size or use REST fallback
-4. **Insight calculation timeout**: Optimize queries or increase cache TTL
+1. **Missing GitHub token**: Set `DD_GITHUB_TOKEN` environment variable or configure via `/github/sync/configuration`
+2. **Invalid token scopes**: Run `python manage.py validate_github_setup` to identify missing scopes
+3. **Rate limit exceeded**: Run `python manage.py validate_github_setup` to check available quota before sync
+4. **Missing Test_Type records**: Run `python manage.py migrate` to create required database prerequisites
+5. **Organization not found**: Verify organization name spelling and token access permissions
+6. **GraphQL query too complex**: Reduce batch size or use REST fallback
+7. **Insight calculation timeout**: Optimize queries or increase cache TTL
+
+**Debugging Tip**: Always run `python manage.py validate_github_setup` first when troubleshooting sync issues. It provides specific error messages and remediation steps.
 
 ## Contributing
 

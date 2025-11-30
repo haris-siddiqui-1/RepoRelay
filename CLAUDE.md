@@ -62,6 +62,11 @@ docker compose exec uwsgi bash
 
 ### GitHub Integration
 ```bash
+# Validate GitHub setup before sync (pre-flight checks)
+docker compose exec uwsgi bash -c "python manage.py validate_github_setup"
+docker compose exec uwsgi bash -c "python manage.py validate_github_setup --json"
+docker compose exec uwsgi bash -c "python manage.py validate_github_setup --token ghp_xxx --org myorg"
+
 # Sync repository metadata
 docker compose exec uwsgi bash -c "python manage.py sync_github_repositories --incremental"
 
@@ -136,13 +141,19 @@ class MyToolParser:
 ```
 
 ### GitHub Integration
-DefectDojo has six GitHub integration patterns:
+DefectDojo has seven GitHub integration patterns:
 1. **Issue Tracking** - GitHub issue creation/sync
 2. **Repository Context Enrichment** - GraphQL-powered metadata collector (47 fields)
 3. **Security Alerts Collection** - Dependabot, CodeQL, Secret Scanning
 4. **Insights Dashboard** - 31 insights across 6 categories
 5. **Product Migration Wizard** - Repository clustering and consolidation
 6. **Dependency Graph Analysis** - SBOM-based consumption tracking
+7. **Setup Validation** - Pre-flight checks for token scopes, rate limits, and prerequisites
+
+**Validation Features:**
+- **Web UI:** "Test Connection" button at `/github/sync/configuration` (6-step validation with real-time feedback)
+- **Management Command:** `python manage.py validate_github_setup` (CLI validation with human-readable or JSON output)
+- **Exit Codes:** 0=pass, 1=warnings, 2=failures (CI/CD friendly)
 
 <!-- See detailed docs: dojo/github_collector/README.md -->
 
